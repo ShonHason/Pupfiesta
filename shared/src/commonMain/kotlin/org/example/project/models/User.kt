@@ -1,4 +1,4 @@
-package org.example.project.domain.modelsEntities
+package org.example.project.models
 
 data class User(
     val id: String,
