@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 This is a Kotlin Multiplatform project targeting Android, iOS.
 
 * `/composeApp` is for code that will be shared across your Compose Multiplatform applications. for screens , App , MainActivity, etc.
@@ -15,3 +16,8 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   Business logic, data models, and other shared code should go here, state,data,di,domain,Models, etc.
 
 Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+=======
+# Pupfiesta
+KMP Project Using Native UI's
+>>>>>>> origin/main
+# Pupfiesta
