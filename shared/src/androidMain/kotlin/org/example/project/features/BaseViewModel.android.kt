@@ -1,8 +1,10 @@
 package org.example.project.features
 
 import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 
-actual open class BaseViewModel actual constructor() {
-    actual val scope: CoroutineScope
-        get() = TODO("Not yet implemented")
+
+actual open class BaseViewModel: ViewModel(){
+    actual val scope: CoroutineScope = viewModelScope
 }
