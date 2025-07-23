@@ -1,0 +1,13 @@
+package org.example.project.presentation.features.dogGardens
+
+import org.example.project.domain.modelsEntities.DogGardens
+
+public sealed class dogGardensState {
+    data object Loading : dogGardensState()
+    data class Loaded(
+        val dogGardens: DogGardens
+    ): dogGardensState()
+    data class Error(
+        val errorMessage: String
+    ): dogGardensState()
+}
