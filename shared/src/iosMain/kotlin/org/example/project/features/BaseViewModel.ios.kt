@@ -1,4 +1,4 @@
-package org.example.project.presentation.features
+package org.example.project.features
 
 import kotlinx.coroutines.CoroutineScope
 

@@ -1,4 +1,4 @@
-package org.example.project.presentation.features.dogGardens
+package org.example.project.features.dogGardens
 
 import org.example.project.domain.modelsEntities.DogGardens
 

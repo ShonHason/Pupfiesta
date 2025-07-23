@@ -1,4 +1,4 @@
-package org.example.project.presentation.features.dogGardens
+package org.example.project.features.dogGardens
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

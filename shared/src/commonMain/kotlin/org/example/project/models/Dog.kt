@@ -1,4 +1,4 @@
-package org.example.project.domain.modelsEntities
+package org.example.project.models
 
 
 import org.example.project.enum.Breed
