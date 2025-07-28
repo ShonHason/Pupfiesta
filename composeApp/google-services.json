@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "460878200300",
+    "project_id": "pf-kmp2025",
+    "storage_bucket": "pf-kmp2025.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:460878200300:android:6f2ac2e683a5ea2dd7d4c9",
+        "android_client_info": {
+          "package_name": "org.example.project"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADdiy_r4VDQpLnQ3nf_tK5rJqetV-A9-I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
