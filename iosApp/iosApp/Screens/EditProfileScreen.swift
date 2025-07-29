@@ -31,7 +31,7 @@ struct EditProfileScreen: View {
 
     // MARK: – Bottom-bar state & callbacks
     @State private var selectedTab: BottomBarContainer.Tab = .profile
-    var onHomeTap: () -> Void
+    var onYardTap: () -> Void
     var onProfileTap: () -> Void
 
     // MARK: – Background gradient
@@ -63,7 +63,7 @@ struct EditProfileScreen: View {
             _ weight: Int,
             _ dogPhoto: UIImage?
         ) -> Void = { _,_,_,_,_,_,_ in },
-        onHomeTap: @escaping () -> Void = {},
+        onYardTap: @escaping () -> Void = {},
         onProfileTap: @escaping () -> Void = {}
     ) {
         // Profile fields
@@ -76,8 +76,8 @@ struct EditProfileScreen: View {
         self._weight     = State(initialValue: weight)
 
         // Bottom-bar defaults
-        self._selectedTab = State(initialValue: .home)
-        self.onHomeTap    = onHomeTap
+        self._selectedTab = State(initialValue: .yard)
+        self.onYardTap    = onYardTap
         self.onProfileTap = onProfileTap
 
         // Dog image
@@ -205,10 +205,10 @@ struct EditProfileScreen: View {
         .safeAreaInset(edge: .bottom) {
             BottomBarContainer(
                 selectedTab:    $selectedTab,
-                onHomeTap:       onHomeTap,
+                onYardTap:       onYardTap,
                 onProfileTap:    onProfileTap,
-                topPadding:      12,
-                bottomPadding:  20,
+                topPadding:      30,
+                bottomPadding:  2,
                 backgroundColor: Color(red: 176/255, green: 212/255, blue: 248/255)
             )
         }
@@ -249,7 +249,7 @@ struct EditProfileScreen_Previews: PreviewProvider {
             weight:      25,
             dogPhoto:    nil,
             onSave:      { _,_,_,_,_,_,_ in },
-            onHomeTap:   { print("🏠 tapped") },
+            onYardTap:   { print("🏠 tapped") },
             onProfileTap:{ print("👤 tapped") }
         )
         .previewDevice("iPhone 14 Pro")
