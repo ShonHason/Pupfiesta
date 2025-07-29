@@ -1,6 +1,8 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.gradle.kotlin.dsl.*
+
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -23,6 +25,9 @@ kotlin {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
             implementation(libs.lottie.compose)
+            implementation(project.dependencies.platform(libs.firebase.bom))
+            implementation(libs.firebase.auth)
+            implementation(libs.firebase.common)
 
 
         }
@@ -72,5 +77,7 @@ android {
 
 dependencies {
     debugImplementation(compose.uiTooling)
+    implementation(platform(libs.firebase.bom))
+
 }
 
