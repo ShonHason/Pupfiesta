@@ -3,13 +3,13 @@ import SwiftUI
 /// A reusable, solid‐background bottom bar with a top divider.
 struct BottomBarContainer: View {
     /// The two tabs our bar supports
-    enum Tab: Hashable { case home, profile }
+    enum Tab: Hashable { case yard, profile }
 
     /// Which tab is currently selected
     @Binding var selectedTab: Tab
 
     /// Callbacks when the user taps Home or Profile
-    var onHomeTap: () -> Void
+    var onYardTap: () -> Void
     var onProfileTap: () -> Void
 
     /// Vertical padding *above* the icons
@@ -28,14 +28,18 @@ struct BottomBarContainer: View {
             // 2) the buttons
             HStack(spacing: 100) {
                 Button {
-                    selectedTab = .home
-                    onHomeTap()
+                    selectedTab = .yard
+                    onYardTap()
                 } label: {
                     VStack(spacing: 4) {
-                        Image(systemName: "house.fill")
-                        Text("Home").font(.footnote)
+                        Image ("dog-house")
+                            .renderingMode(.template)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 24, height: 24)
+                        Text("Yard").font(.footnote)
                     }
-                    .foregroundColor(selectedTab == .home ? .blue : .gray)
+                    .foregroundColor(selectedTab == .yard ? .blue : .gray)
                 }
 
                 Button {
@@ -75,9 +79,9 @@ struct BottomBarContainer_Previews: PreviewProvider {
 
             BottomBarContainer(
                 selectedTab: .constant(.profile),
-                onHomeTap:    { print("🏠 tapped") },
+                onYardTap:    { print("🏠 tapped") },
                 onProfileTap: { print("👤 tapped") },
-                topPadding:    16,    // raise or lower icons
+                topPadding:    30,    // raise or lower icons
                 bottomPadding: 2,    // extra room below
                 backgroundColor: Color(red: 176/255, green: 212/255, blue: 248/255)
             )
