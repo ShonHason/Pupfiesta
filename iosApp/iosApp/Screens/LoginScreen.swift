@@ -1,11 +1,12 @@
 import SwiftUI
+import Shared
 
 struct LoginScreen: View {
     // MARK: — Form State
     @State private var email        = ""
     @State private var password     = ""
     @State private var showPassword = false
-
+§
     var body: some View {
         NavigationStack {
             ZStack {
@@ -122,7 +123,7 @@ struct LoginScreen: View {
                         Text("if you don’t have an account you can")
                             .font(.footnote)
                             .foregroundColor(.gray)
-                        NavigationLink("Register here!", destination: RegisterScreen())
+                        NavigationLink("Register here!", destination: LoginScreen())
                             .font(.footnote)
                             .fontWeight(.semibold)
                             .foregroundColor(.blue)

@@ -7,11 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C5745EF92E3924F9003EA0F2 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = C5745EF82E3924F9003EA0F2 /* FirebaseAnalytics */; };
+		C5745EFB2E3924F9003EA0F2 /* FirebaseAnalyticsIdentitySupport in Frameworks */ = {isa = PBXBuildFile; productRef = C5745EFA2E3924F9003EA0F2 /* FirebaseAnalyticsIdentitySupport */; };
+		C5745EFD2E3924F9003EA0F2 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = C5745EFC2E3924F9003EA0F2 /* FirebaseAuth */; };
+		C5745EFF2E3924F9003EA0F2 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = C5745EFE2E3924F9003EA0F2 /* FirebaseCore */; };
+		C5745F012E3924F9003EA0F2 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = C5745F002E3924F9003EA0F2 /* FirebaseFirestore */; };
 		C5EDBF1A2E30E2BD0061B713 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = C5EDBF192E30E2BD0061B713 /* Lottie */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		B9DA97B12DC1472C00A4DA20 /* Pupfiesta.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pupfiesta.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B9DA97B12DC1472C00A4DA20 /* iosApp
+.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "iosApp\n.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -45,7 +51,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C5745EF92E3924F9003EA0F2 /* FirebaseAnalytics in Frameworks */,
+				C5745EFF2E3924F9003EA0F2 /* FirebaseCore in Frameworks */,
 				C5EDBF1A2E30E2BD0061B713 /* Lottie in Frameworks */,
+				C5745EFB2E3924F9003EA0F2 /* FirebaseAnalyticsIdentitySupport in Frameworks */,
+				C5745EFD2E3924F9003EA0F2 /* FirebaseAuth in Frameworks */,
+				C5745F012E3924F9003EA0F2 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -64,7 +75,8 @@
 		B9DA97B22DC1472C00A4DA20 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B9DA97B12DC1472C00A4DA20 /* Pupfiesta.app */,
+				B9DA97B12DC1472C00A4DA20 /* iosApp
+.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -91,9 +103,15 @@
 			name = iosApp;
 			packageProductDependencies = (
 				C5EDBF192E30E2BD0061B713 /* Lottie */,
+				C5745EF82E3924F9003EA0F2 /* FirebaseAnalytics */,
+				C5745EFA2E3924F9003EA0F2 /* FirebaseAnalyticsIdentitySupport */,
+				C5745EFC2E3924F9003EA0F2 /* FirebaseAuth */,
+				C5745EFE2E3924F9003EA0F2 /* FirebaseCore */,
+				C5745F002E3924F9003EA0F2 /* FirebaseFirestore */,
 			);
 			productName = iosApp;
-			productReference = B9DA97B12DC1472C00A4DA20 /* Pupfiesta.app */;
+			productReference = B9DA97B12DC1472C00A4DA20 /* iosApp
+.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -122,6 +140,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				C5EDBF182E30E2BD0061B713 /* XCRemoteSwiftPackageReference "lottie-ios" */,
+				C5745EF72E3924F9003EA0F2 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B9DA97B22DC1472C00A4DA20 /* Products */;
@@ -306,6 +325,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"iosApp/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -323,6 +343,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				PRODUCT_MODULE_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PRODUCT_NAME = "iosApp\n";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -338,6 +360,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"iosApp/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -355,6 +378,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				PRODUCT_MODULE_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PRODUCT_NAME = "iosApp\n";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -385,6 +410,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		C5745EF72E3924F9003EA0F2 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
 		C5EDBF182E30E2BD0061B713 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/airbnb/lottie-ios.git";
@@ -396,6 +429,31 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		C5745EF82E3924F9003EA0F2 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C5745EF72E3924F9003EA0F2 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+		C5745EFA2E3924F9003EA0F2 /* FirebaseAnalyticsIdentitySupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C5745EF72E3924F9003EA0F2 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalyticsIdentitySupport;
+		};
+		C5745EFC2E3924F9003EA0F2 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C5745EF72E3924F9003EA0F2 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		C5745EFE2E3924F9003EA0F2 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C5745EF72E3924F9003EA0F2 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		C5745F002E3924F9003EA0F2 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C5745EF72E3924F9003EA0F2 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
 		C5EDBF192E30E2BD0061B713 /* Lottie */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = C5EDBF182E30E2BD0061B713 /* XCRemoteSwiftPackageReference "lottie-ios" */;
