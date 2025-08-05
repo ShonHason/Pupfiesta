@@ -1,2 +1,2 @@
-package org.example.project.features.landing
+package org.example.project.features.login
 

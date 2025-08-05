@@ -1,4 +1,4 @@
-package org.example.project.models
+package org.example.project.domain.models
 
 data class Location(
     val latitude: Double,

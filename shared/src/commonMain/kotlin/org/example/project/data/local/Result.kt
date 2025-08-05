@@ -1,4 +1,4 @@
-package org.example.project.data
+package org.example.project.data.local
 
 sealed interface Result<out R, out E> {
     data class Success<R>(val data: R?) : Result<R, Nothing>

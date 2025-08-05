@@ -1,4 +1,4 @@
-package org.example.project.data.remote
+package org.example.project.data.repository
 
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth

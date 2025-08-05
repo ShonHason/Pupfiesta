@@ -1,6 +1,6 @@
 package org.example.project.features.dogGardens
 
-import org.example.project.models.DogGardens
+import org.example.project.domain.models.DogGardens
 
 public sealed class dogGardensState {
     data object Loading : dogGardensState()

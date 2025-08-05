@@ -1,4 +1,4 @@
-package org.example.project.data.repository
+package org.example.project.data.firebase
 
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseUser
@@ -8,12 +8,10 @@ import org.example.project.data.local.Result
 import org.example.project.data.remote.dto.DogDto
 import org.example.project.data.remote.dto.UserDto
 import org.example.project.domain.models.AuthError
-import org.example.project.domain.repository.AuthRepository
-
 import org.example.project.domain.models.User
 import org.example.project.utils.extension.toDto
 
-class RemoteAuthRepository : AuthRepository {
+class RemoteFirebaseRepository : FirebaseRepository {
 
     private val auth = Firebase.auth
     private val firestore = Firebase.firestore
@@ -152,4 +150,5 @@ class RemoteAuthRepository : AuthRepository {
             Result.Failure(AuthError("Logout failed: ${e.message}"))
         }
     }
+
 }
