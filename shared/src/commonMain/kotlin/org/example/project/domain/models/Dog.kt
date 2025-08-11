@@ -1,10 +1,11 @@
-package org.example.project.models
+package org.example.project.domain.models
 
 
 import org.example.project.enum.Breed
 import org.example.project.enum.Gender
 
 data class Dog(
+    val id: String = "",
     val dogName: String,
     val dogBreed: Breed,
     val dogGender: Gender,
