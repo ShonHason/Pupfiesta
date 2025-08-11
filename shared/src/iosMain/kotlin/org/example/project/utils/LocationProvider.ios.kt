@@ -1,6 +1,10 @@
 // shared/src/iosMain/kotlin/org/example/project/utils/LocationUtils.ios.kt
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package org.example.project.utils
 
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.useContents
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -10,6 +14,7 @@ import platform.darwin.NSObject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+@OptIn(ExperimentalForeignApi::class)
 actual suspend fun getLocation(): Location = withContext(Dispatchers.Main.immediate) {
     suspendCancellableCoroutine { cont ->
         val manager = CLLocationManager().apply {
@@ -24,8 +29,10 @@ actual suspend fun getLocation(): Location = withContext(Dispatchers.Main.immedi
                     kCLAuthorizationStatusAuthorizedWhenInUse,
                     kCLAuthorizationStatusAuthorizedAlways -> manager.startUpdatingLocation()
                     kCLAuthorizationStatusDenied,
-                    kCLAuthorizationStatusRestricted -> fail("Location permission denied")
-                    kCLAuthorizationStatusNotDetermined -> Unit
+                    kCLAuthorizationStatusRestricted ->
+                        fail("Location permission denied")
+                    kCLAuthorizationStatusNotDetermined ->
+                        manager.requestWhenInUseAuthorization()
                     else -> Unit
                 }
             }
@@ -39,8 +46,10 @@ actual suspend fun getLocation(): Location = withContext(Dispatchers.Main.immedi
                     kCLAuthorizationStatusAuthorizedWhenInUse,
                     kCLAuthorizationStatusAuthorizedAlways -> manager.startUpdatingLocation()
                     kCLAuthorizationStatusDenied,
-                    kCLAuthorizationStatusRestricted -> fail("Location permission denied")
-                    kCLAuthorizationStatusNotDetermined -> Unit
+                    kCLAuthorizationStatusRestricted ->
+                        fail("Location permission denied")
+                    kCLAuthorizationStatusNotDetermined ->
+                        manager.requestWhenInUseAuthorization()
                     else -> Unit
                 }
             }
@@ -49,13 +58,13 @@ actual suspend fun getLocation(): Location = withContext(Dispatchers.Main.immedi
                 manager: CLLocationManager,
                 didUpdateLocations: List<*>
             ) {
-                val cl = didUpdateLocations.lastOrNull() as? CLLocation
-                if (cl == null) {
-                    fail("Location unavailable")
-                    return
+                val last = didUpdateLocations.lastOrNull() as? CLLocation
+                    ?: return fail("Location unavailable")
+
+                // CLLocationCoordinate2D is a C struct: read via useContents
+                last.coordinate.useContents {
+                    succeed(Location(latitude = latitude, longitude = longitude))
                 }
-                val coord = cl.coordinate
-                succeed(Location(latitude = coord.latitude, longitude = coord.longitude))
             }
 
             override fun locationManager(

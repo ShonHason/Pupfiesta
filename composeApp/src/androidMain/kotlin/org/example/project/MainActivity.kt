@@ -14,7 +14,7 @@ import com.google.firebase.FirebaseApp
 import org.example.project.data.dogGardens.GoogleGardensRepo
 import org.example.project.data.firebase.FirebaseRepository
 import org.example.project.data.firebase.RemoteFirebaseRepository
-import org.example.project.features.dogGardens.DogGardensViewModel
+import org.example.project.data.dogGardens.DogGardensViewModel
 import org.example.project.features.registration.UserViewModel
 import org.example.project.presentation.screens.home.GardenScreen
 import org.example.project.presentation.screens.landing.LandingScreen
