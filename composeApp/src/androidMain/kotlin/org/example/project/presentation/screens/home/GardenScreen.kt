@@ -124,7 +124,7 @@ fun GardenScreen(
                                 .padding(horizontal = 8.dp)
                         )
                         Text(
-                            text = "50 km",
+                            text = "20 km",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.width( fortyEightDp )
                         )
