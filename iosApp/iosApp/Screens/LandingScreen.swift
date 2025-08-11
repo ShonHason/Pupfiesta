@@ -44,7 +44,7 @@ struct LandingScreen: View {
                         }
 
                         NavigationLink {
-                          //  RegisterScreen()
+                            RegisterScreen()
                         } label: {
                             Text("Register")
                                 .fontWeight(.semibold)

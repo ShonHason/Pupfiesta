@@ -15,4 +15,5 @@ sealed interface UserEvent{
     data class DogPictureUrlChanged(val dogPictureUrl: String?): UserEvent
     data object ResetState : UserEvent
     data object OnSignUp : UserEvent
+    data object OnSignIn : UserEvent
 }

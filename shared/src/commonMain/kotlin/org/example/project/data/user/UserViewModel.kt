@@ -1,5 +1,6 @@
 package org.example.project.features.registration
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -12,6 +13,7 @@ import org.example.project.data.user.UserFormData
 import org.example.project.data.user.UserState
 import org.example.project.enum.Gender
 import org.example.project.features.BaseViewModel
+import org.example.project.platformLogger
 
 class UserViewModel(
     private val firebaseRepo: FirebaseRepository = RemoteFirebaseRepository()
@@ -35,6 +37,40 @@ class UserViewModel(
             is UserEvent.DogPictureUrlChanged -> updateState { copy(dogPictureUrl = event.dogPictureUrl) }
             UserEvent.ResetState           -> resetState()
             UserEvent.OnSignUp             -> validateAndSubmitForm()
+            is UserEvent.OnSignIn -> userSignIn()
+        }
+    }
+
+
+
+
+    private fun userSignIn() {
+        val initState = _userState.value as? UserState.Initial ?: return
+        val data = initState.data
+
+        scope.launch {
+            // show the loader immediately
+            _userState.value = UserState.Loading
+
+            // perform the login call
+            val result = firebaseRepo.userLogin(
+                email = data.email,
+                password = data.password
+            )
+
+            when (result) {
+                is Result.Success -> {
+                    // keep the loader on-screen for at least 2 seconds
+                    delay(3000)
+                    _userState.value = UserState.Loaded
+                }
+                is Result.Failure -> {
+                    // no delay on failure, show error right away
+                    _userState.value = UserState.Error(
+                        result.error?.message ?: "Login failed"
+                    )
+                }
+            }
         }
     }
 
@@ -43,6 +79,8 @@ class UserViewModel(
             ?: UserFormData()
         _userState.value = UserState.Initial(current.transform())
     }
+
+
 
     private fun resetState() {
         _userState.value = UserState.Initial(UserFormData())
@@ -81,6 +119,7 @@ class UserViewModel(
         scope.launch {
             _userState.value = UserState.Loading
 
+            platformLogger("PUP" , "Launching user registration with data: $data")
             when (val result = firebaseRepo.userRegistration(
                 email    = data.email,
                 password = data.password,
@@ -92,6 +131,21 @@ class UserViewModel(
                 is Result.Failure ->
                     _userState.value = UserState.Error(
                         result.error?.message ?: "Registration failed"
+                    )
+            }
+        }
+    }
+
+    private fun loginUser(email: String, password: String) {
+        scope.launch {
+            _userState.value = UserState.Loading
+
+            when (val result = firebaseRepo.userLogin(email, password)) {
+                is Result.Success ->
+                    _userState.value = UserState.Loaded
+                is Result.Failure ->
+                    _userState.value = UserState.Error(
+                        result.error?.message ?: "Login failed"
                     )
             }
         }

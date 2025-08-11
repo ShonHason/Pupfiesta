@@ -1,8 +1,6 @@
-import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+// composeApp/build.gradle.kts
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.gradle.kotlin.dsl.*
-
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -10,44 +8,68 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     id("com.google.gms.google-services")
+}
 
+repositories {
+    google()
+    mavenCentral()
 }
 
 kotlin {
     androidTarget {
         @OptIn(ExperimentalKotlinGradlePluginApi::class)
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_11)
-        }
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_11) }
     }
-    
+
     sourceSets {
-        
-        androidMain.dependencies {
-            implementation(compose.preview)
-            implementation(libs.androidx.activity.compose)
-            implementation(libs.lottie.compose)
-            implementation(project.dependencies.platform(libs.firebase.bom))
-            implementation(libs.firebase.auth)
-            implementation(libs.firebase.common)
-            implementation(project.dependencies.platform(libs.firebase.bom))
+        val ktor = "2.3.12"
 
+        val androidMain by getting {
+            dependencies {
+                implementation(compose.preview)
+                implementation(libs.androidx.activity.compose)
+                implementation(libs.lottie.compose)
 
+                implementation(libs.androidx.material.icons.extended)
+                implementation(project.dependencies.platform(libs.firebase.bom))
+                implementation(libs.firebase.auth)
+                implementation(libs.firebase.common)
+                implementation(project.dependencies.platform(libs.firebase.bom))
+                implementation(libs.coil.compose)
+                implementation("androidx.activity:activity-compose:1.7.2")
+                implementation("androidx.navigation:navigation-compose:2.7.0")
+                implementation("com.google.accompanist:accompanist-permissions:0.32.0")
 
+                implementation("com.google.android.gms:play-services-location:21.0.1")
+                implementation("com.google.android.gms:play-services-maps:18.1.0")
+                implementation("com.google.maps.android:maps-compose:2.11.3")
+
+                // Ktor (needed because MainActivity references HttpClient via httpClient())
+                implementation("io.ktor:ktor-client-core:$ktor")
+                implementation("io.ktor:ktor-client-okhttp:$ktor")
+                implementation("io.ktor:ktor-client-content-negotiation:$ktor")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor")
+            }
         }
-        commonMain.dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.ui)
-            implementation(compose.components.resources)
-            implementation(compose.components.uiToolingPreview)
-            implementation(libs.androidx.lifecycle.viewmodel)
-            implementation(libs.androidx.lifecycle.runtimeCompose)
-            implementation(projects.shared)
+
+        val commonMain by getting {
+            dependencies {
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(compose.material3)
+                implementation(compose.ui)
+                implementation(compose.components.resources)
+                implementation(compose.components.uiToolingPreview)
+                implementation(libs.androidx.lifecycle.viewmodel)
+                implementation(libs.androidx.lifecycle.runtimeCompose)
+
+                // depends on the shared module
+                implementation(projects.shared)
+            }
         }
-        commonTest.dependencies {
-            implementation(libs.kotlin.test)
+
+        val commonTest by getting {
+            dependencies { implementation(libs.kotlin.test) }
         }
     }
 }
@@ -62,17 +84,20 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
+
+        // Maps key from gradle.properties → AndroidManifest
+        manifestPlaceholders["com.google.android.geo.API_KEY"] =
+            project.property("GOOGLE_MAPS_API_KEY") as String
     }
+
     packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+
     buildTypes {
-        getByName("release") {
-            isMinifyEnabled = false
-        }
+        getByName("release") { isMinifyEnabled = false }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -85,6 +110,4 @@ dependencies {
     debugImplementation(compose.uiTooling)
     implementation(platform(libs.firebase.bom))
     implementation(libs.google.firebase.auth)
-
 }
-

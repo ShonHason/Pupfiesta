@@ -1,5 +1,9 @@
 package org.example.project.enum
 
+import kotlinx.serialization.Serializable
+
+
+@Serializable
 enum class Breed {
     MIXED,
     AKITA,

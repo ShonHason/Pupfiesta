@@ -1,275 +1,347 @@
 // file: RegistrationScreen.kt
 package org.example.project.presentation.screens.registration
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import org.example.project.data.user.UserEvent
 import org.example.project.data.user.UserFormData
 import org.example.project.data.user.UserState
-import kotlin.math.roundToInt
 import org.example.project.enum.Breed
 import org.example.project.enum.Gender
-import org.example.project.features.registration.*
+import org.example.project.features.registration.UserViewModel
+import kotlin.math.roundToInt
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegistrationScreen(
     viewModel: UserViewModel,
-        onBack: () -> Unit,
-        onRegistered: () -> Unit
+    onBack: () -> Unit,
+    onRegistered: () -> Unit
 ) {
-    // 1️⃣ Observe the registration state from the ViewModel
+    // Observe registration state
     val registrationState by viewModel.userState.collectAsState()
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("User Registration") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
+    // Local UI state
+    var selectedBreed by remember { mutableStateOf(Breed.MIXED) }
+    var breedMenuExpanded by remember { mutableStateOf(false) }
+    var isMale by remember { mutableStateOf(true) }
+    var isNeutered by remember { mutableStateOf(true) }
+    var isFriendly by remember { mutableStateOf(true) }
+    var selectedWeight by remember { mutableStateOf(25) }
+    var dogImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Image picker launcher
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> dogImageUri = uri }
+
+    // Navigate on success
+    if (registrationState is UserState.Loaded) {
+        LaunchedEffect(Unit) { onRegistered() }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Background gradient
         Box(
             modifier = Modifier
-                .padding(innerPadding)
                 .fillMaxSize()
-        ) {
-            when (registrationState) {
-                is UserState.Initial -> {
-                    // Idle state → show the form
-                    val data = (registrationState as UserState.Initial).data
-                    RegistrationForm(
-                        formData = data,
-                        onEvent = viewModel::onEvent
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFF8F1C4),
+                            Color(0xFFB0D4F8)
+                        )
                     )
-                }
-                UserState.Loading -> {
-                    // Loading state → centered spinner
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-                UserState.Loaded -> {
-                    // Loaded state → navigate away
-                    LaunchedEffect(Unit) { onRegistered() }
-                }
-                is UserState.Error -> {
-                    // Error state → show error message + retry
-                    val msg = (registrationState as UserState.Error).message
-                    Column(
+                )
+        )
+
+        // Scrollable form content, padded below back arrow
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(top = 56.dp)
+        ) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "Let’s Get To Know You!",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            Spacer(Modifier.height(24.dp))
+
+            val data = (registrationState as? UserState.Initial)?.data ?: UserFormData()
+
+            // Email
+            OutlinedTextField(
+                value = data.email,
+                onValueChange = { viewModel.onEvent(UserEvent.EmailChanged(it)) },
+                placeholder = { Text("Enter Email") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+            )
+            Spacer(Modifier.height(16.dp))
+
+            // Password
+            OutlinedTextField(
+                value = data.password,
+                onValueChange = { viewModel.onEvent(UserEvent.PasswordChanged(it)) },
+                placeholder = { Text("Enter Password") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+            )
+            Spacer(Modifier.height(16.dp))
+
+            // Owner’s Name
+            OutlinedTextField(
+                value = data.ownerName,
+                onValueChange = { viewModel.onEvent(UserEvent.OwnerNameChanged(it)) },
+                placeholder = { Text("Enter Owner’s Name") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            )
+            Spacer(Modifier.height(16.dp))
+
+            // Dog’s Name
+            OutlinedTextField(
+                value = data.dogName,
+                onValueChange = { viewModel.onEvent(UserEvent.DogNameChanged(it)) },
+                placeholder = { Text("Enter Dog’s Name") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            )
+            Spacer(Modifier.height(16.dp))
+
+            // Breed selector
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("What is your dog’s breed?", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.weight(1f))
+                Box {
+                    Text(
+                        text = selectedBreed.name
+                            .lowercase()
+                            .replace('_',' ')
+                            .split(' ')
+                            .joinToString(" ") { it.replaceFirstChar(Char::uppercase) },
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .clickable { breedMenuExpanded = true }
+                            .background(Color.Gray.copy(alpha=0.1f), RoundedCornerShape(8.dp))
+                            .padding(12.dp)
+                    )
+                    DropdownMenu(
+                        expanded = breedMenuExpanded,
+                        onDismissRequest = { breedMenuExpanded = false }
                     ) {
-                        Text(text = msg, color = MaterialTheme.colorScheme.error)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { viewModel.onEvent(UserEvent.ResetState) }) {
-                            Text("Retry")
+                        Breed.values().forEach { breed ->
+                            DropdownMenuItem(
+                                text = { Text(
+                                    breed.name
+                                        .lowercase()
+                                        .replace('_',' ')
+                                        .split(' ')
+                                        .joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+                                )},
+                                onClick = {
+                                    selectedBreed = breed
+                                    viewModel.onEvent(UserEvent.DogBreedChanged(breed))
+                                    breedMenuExpanded = false
+                                }
+                            )
                         }
                     }
-                    // Re-show the form beneath the error
-                    val data = (viewModel.userState.value as? UserState.Initial)?.data
-                        ?: UserFormData()
-                    RegistrationForm(
-                        formData = data,
-                        onEvent = viewModel::onEvent
-                    )
                 }
             }
-        }
-    }
-}
+            Spacer(Modifier.height(16.dp))
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RegistrationForm(
-    formData: UserFormData,
-    onEvent: (UserEvent) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Email
-        OutlinedTextField(
-            value = formData.email,
-            onValueChange = { onEvent(UserEvent.EmailChanged(it)) },
-            label = { Text("Email") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
-        )
-
-        // Password
-        OutlinedTextField(
-            value = formData.password,
-            onValueChange = { onEvent(UserEvent.PasswordChanged(it)) },
-            label = { Text("Password") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-        )
-
-        // Owner Name
-        OutlinedTextField(
-            value = formData.ownerName,
-            onValueChange = { onEvent(UserEvent.OwnerNameChanged(it)) },
-            label = { Text("Owner Name") },
-            singleLine = true
-        )
-
-        // Dog Name
-        OutlinedTextField(
-            value = formData.dogName,
-            onValueChange = { onEvent(UserEvent.DogNameChanged(it)) },
-            label = { Text("Dog Name") },
-            singleLine = true
-        )
-
-        // Breed Selector
-        BreedSelector(
-            selectedBreed = formData.dogBreed,
-            onBreedSelected = { onEvent(UserEvent.DogBreedChanged(it)) }
-        )
-
-        // Gender Toggle (blue for Male, pink for Female)
-        GenderToggle(
-            selectedGender = formData.dogGender,
-            onGenderSelected = { onEvent(UserEvent.DogGenderChanged(it)) }
-        )
-
-        // Neutered & Friendly switches
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Neutered")
-            Spacer(Modifier.width(8.dp))
-            Switch(
-                checked = formData.isNeutered,
-                onCheckedChange = { onEvent(UserEvent.IsNeuteredChanged(it)) }
-            )
-            Spacer(Modifier.width(24.dp))
-            Text("Friendly")
-            Spacer(Modifier.width(8.dp))
-            Switch(
-                checked = formData.isFriendly,
-                onCheckedChange = { onEvent(UserEvent.IsFriendlyChanged(it)) }
-            )
-        }
-
-        // Weight Slider
-        Column {
-            Text("Weight: ${formData.dogWeight} kg")
-            Slider(
-                value = formData.dogWeight.toFloat(),
-                onValueChange = { onEvent(UserEvent.DogWeightChanged(it.roundToInt())) },
-                valueRange = 1f..100f
-            )
-        }
-
-        // Submit Button
-        Button(
-            onClick = { onEvent(UserEvent.OnSignUp) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Apply Changes")
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BreedSelector(
-    selectedBreed: Breed,
-    onBreedSelected: (Breed) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val breeds = Breed.values().toList()
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded }
-    ) {
-        OutlinedTextField(
-            value = selectedBreed.name.lowercase()
-                .replaceFirstChar { it.uppercase() },
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Breed") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor()
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            breeds.forEach { breed ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            breed.name.lowercase()
-                                .replaceFirstChar { it.uppercase() }
-                        )
-                    },
+            // Gender toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal=16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Gender", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.weight(1f))
+                Button(
                     onClick = {
-                        onBreedSelected(breed)
-                        expanded = false
+                        isMale = !isMale
+                        viewModel.onEvent(UserEvent.DogGenderChanged(if(isMale) Gender.MALE else Gender.FEMALE))
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if(isMale) Color(0xFFD0E9FF) else Color(0xFFFFD0E0),
+                        contentColor = if(isMale) Color(0xFF1196F3) else Color(0xFFFF4081)
+                    ),
+                    modifier = Modifier.size(80.dp,32.dp)
+                ) { Text(if(isMale) "Male" else "Female") }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Neutered & Friendly
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal=16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Neutered/Spayed?", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.weight(1f))
+                Switch(
+                    checked = isNeutered,
+                    onCheckedChange = {
+                        isNeutered = it
+                        viewModel.onEvent(UserEvent.IsNeuteredChanged(it))
                     }
                 )
+                Spacer(Modifier.width(8.dp))
+                Text(if(isNeutered) "Yes" else "No", style = MaterialTheme.typography.bodyMedium)
             }
-        }
-    }
-}
 
-@Composable
-private fun GenderToggle(
-    selectedGender: Gender,
-    onGenderSelected: (Gender) -> Unit
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(
-            onClick = { onGenderSelected(Gender.MALE) },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (selectedGender == Gender.MALE)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Text("Male")
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal=16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Friendly?", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.weight(1f))
+                Switch(
+                    checked = isFriendly,
+                    onCheckedChange = {
+                        isFriendly = it
+                        viewModel.onEvent(UserEvent.IsFriendlyChanged(it))
+                    }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(if(isFriendly) "Yes" else "No", style = MaterialTheme.typography.bodyMedium)
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Weight & Photo
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal=16.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Column {
+                    Text("Dog Weight (kg)", style = MaterialTheme.typography.bodyMedium)
+                    Slider(
+                        value = selectedWeight.toFloat(),
+                        onValueChange = {
+                            selectedWeight = it.roundToInt()
+                            viewModel.onEvent(UserEvent.DogWeightChanged(selectedWeight))
+                        },
+                        valueRange = 5f..50f,
+                        modifier = Modifier.width(120.dp)
+                    )
+                    Text("${selectedWeight}kg", style = MaterialTheme.typography.bodyMedium)
+                }
+                Spacer(Modifier.weight(1f))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Tap to upload picture", style = MaterialTheme.typography.bodyMedium)
+                    IconButton(onClick = { imagePickerLauncher.launch("image/*") }) {
+                        if (dogImageUri != null) {
+                            AsyncImage(
+                                model = dogImageUri,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .background(Color.Gray.copy(alpha = 0.1f), CircleShape)
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .background(Color.Gray.copy(alpha = 0.1f), CircleShape)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Sign Up
+            Button(
+                onClick = { viewModel.onEvent(UserEvent.OnSignUp) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal=16.dp, vertical=16.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Sign Up")
+            }
+
+            Spacer(Modifier.height(20.dp))
         }
-        Button(
-            onClick = { onGenderSelected(Gender.FEMALE) },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (selectedGender == Gender.FEMALE)
-                    Color(0xFFFFC0CB)
-                else
-                    MaterialTheme.colorScheme.surfaceVariant
-            )
+
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+                .size(36.dp)
         ) {
-            Text("Female")
+            Icon(Icons.Filled.ArrowBack, contentDescription="Back")
         }
     }
 }
