@@ -34,7 +34,6 @@ kotlin {
                 implementation(project.dependencies.platform(libs.firebase.bom))
                 implementation(libs.firebase.auth)
                 implementation(libs.firebase.common)
-                implementation(project.dependencies.platform(libs.firebase.bom))
                 implementation(libs.coil.compose)
                 implementation("androidx.activity:activity-compose:1.7.2")
                 implementation("androidx.navigation:navigation-compose:2.7.0")

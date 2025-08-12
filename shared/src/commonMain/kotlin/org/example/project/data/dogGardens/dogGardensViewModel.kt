@@ -1,11 +1,10 @@
 // shared/src/commonMain/kotlin/org/example/project/features/dogGardens/DogGardensViewModel.kt
-package org.example.project.features.dogGardens
+package org.example.project.data.dogGardens
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.example.project.data.dogGardens.GardensRepository
 import org.example.project.data.firebase.FirebaseRepository
 import org.example.project.data.firebase.RemoteFirebaseRepository
 import org.example.project.data.local.Result
@@ -34,11 +33,11 @@ class DogGardensViewModel(
     private val _gardens = MutableStateFlow<List<DogGarden>>(emptyList())
     val gardens: StateFlow<List<DogGarden>> = _gardens.asStateFlow()
 
-    fun loadLocation() {
-        scope.launch {
-            try { _userLocation.value = getLocation() } catch (_: Throwable) { _userLocation.value = null }
+        fun loadLocation() {
+            scope.launch {
+                try { _userLocation.value = getLocation() } catch (_: Throwable) { _userLocation.value = null }
+            }
         }
-    }
 
     fun setSearchCenter(location: Location) { _searchCenter.value = location }
     fun useTelAvivAsCenter() { _searchCenter.value = TEL_AVIV }

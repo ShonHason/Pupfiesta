@@ -4,15 +4,15 @@ package org.example.project.presentation.screens.home
 import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -23,11 +23,11 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import kotlinx.coroutines.cancel
-import org.example.project.features.dogGardens.DogGardensViewModel
+import org.example.project.data.dogGardens.DogGardensViewModel
 import org.example.project.utils.Location
 
 private enum class HomeTab(val label: String, val icon: @Composable () -> Unit) {
-    Yard("Yard",    { Icon(Icons.Filled.Pets, contentDescription = "Yard") }),
+    Yard("Yard", { Icon(Icons.Filled.Pets, contentDescription = "Yard") }),
     Profile("Profile", { Icon(Icons.Filled.Person, contentDescription = "Profile") })
 }
 
@@ -40,7 +40,7 @@ fun GardenScreen(
 ) {
     var selectedTab by remember { mutableStateOf(HomeTab.Yard) }
 
-    // 1️⃣ Handle location permission
+    // 1) Location permission
     val locationPerm = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     var hasAskedPermission by remember { mutableStateOf(false) }
     LaunchedEffect(locationPerm.status) {
@@ -52,16 +52,17 @@ fun GardenScreen(
         }
     }
 
-    // 2️⃣ Observe state from VM
-    val userLoc     by viewModel.userLocation.collectAsState()
-    val gardens     by viewModel.gardens.collectAsState()
-    val radiusMeters by viewModel.radiusMeters.collectAsState()
-    val radiusKm    = (radiusMeters / 1000f).coerceAtLeast(1f)
+    // 2) Observe VM state (avoid smart-cast issue by reading into locals)
+    val userLocState = viewModel.userLocation.collectAsState()
+    val userLoc = userLocState.value
 
-    // 3️⃣ When radius changes, re-fetch
+    val gardens by viewModel.gardens.collectAsState()
+    val radiusMeters by viewModel.radiusMeters.collectAsState()
+    val radiusKm = (radiusMeters / 1000f).coerceAtLeast(1f)
+
+    // 3) When radius or location changes, pull from DB and save
     LaunchedEffect(radiusMeters, userLoc) {
         if (userLoc != null) {
-
             viewModel.getGardens()
             viewModel.saveGardens()
         }
@@ -72,9 +73,9 @@ fun GardenScreen(
             NavigationBar {
                 HomeTab.values().forEach { tab ->
                     NavigationBarItem(
-                        icon    = tab.icon,
-                        label   = { Text(tab.label) },
-                        selected= (tab == selectedTab),
+                        icon = tab.icon,
+                        label = { Text(tab.label) },
+                        selected = (tab == selectedTab),
                         onClick = { selectedTab = tab }
                     )
                 }
@@ -86,7 +87,7 @@ fun GardenScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // — Top info strip with dynamic radius and count —
+            // Top info strip
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -94,47 +95,48 @@ fun GardenScreen(
                 color = MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Column(
-                    Modifier
-                        .padding(16.dp),
+                    Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text("Dog Parks Found: ${gardens.size}", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
                     Text("Radius: ${radiusKm.toInt()} km", style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(12.dp))
-                    // Slider to adjust radius between 1 km and 50 km
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
                     ) {
                         Text(
                             text = "1 km",
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.width( thirtySixDp )
+                            modifier = Modifier.width(thirtySixDp)
                         )
                         Slider(
                             value = radiusKm,
                             onValueChange = { newKm ->
                                 viewModel.setRadius((newKm * 1000).toInt())
                             },
-                            valueRange = 1f..50f,
+                            valueRange = 1f..10f,
                             steps = 49,
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 8.dp)
                         )
                         Text(
-                            text = "20 km",
+                            text = "10 km",
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.width( fortyEightDp )
+                            modifier = Modifier.width(fortyEightDp)
                         )
                     }
                 }
             }
 
-            // — Map or loading message —
+            // Map or loading
             Box(modifier = Modifier.weight(1f)) {
-                if (userLoc == null) {
+                val loc = userLoc
+                if (loc == null) {
                     Box(
                         Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -146,11 +148,12 @@ fun GardenScreen(
                         )
                     }
                 } else {
-                    MapView(userLoc!!)
+                    // Camera stays on Tel Aviv; we add the user's marker too
+                    MapView(loc)
                 }
             }
 
-            // — Scan button —
+            // Scan button
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -169,10 +172,10 @@ fun GardenScreen(
         }
     }
 
-    // 4️⃣ Back‐handler
+    // Back handler
     BackHandler { onBack() }
 
-    // 5️⃣ Clean up VM’s scope when this screen is popped
+    // Clean up VM scope when screen is popped
     DisposableEffect(Unit) {
         onDispose { viewModel.scope.cancel() }
     }
@@ -180,20 +183,26 @@ fun GardenScreen(
 
 @Composable
 private fun MapView(loc: Location) {
-    // Tel Aviv’s coordinates as fallback center
-    val center = LatLng(32.0853, 34.7818)
+    // Camera always centered on Tel Aviv
+    val telAviv = LatLng(32.0853, 34.7818)
 
     val cameraState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(center, 12f)
+        position = CameraPosition.fromLatLngZoom(telAviv, 14f)
     }
 
     GoogleMap(
         modifier = Modifier.fillMaxSize(),
         cameraPositionState = cameraState
     ) {
-        // Marker at Tel Aviv (or user location if you prefer)
+        // Marker for Tel Aviv (fixed center)
         Marker(
-            state = rememberMarkerState(position = center),
+            state = rememberMarkerState(position = telAviv),
+            title = "Tel Aviv"
+        )
+
+        // Marker for the user's actual location
+        Marker(
+            state = rememberMarkerState(position = LatLng(loc.latitude, loc.longitude)),
             title = "You are here"
         )
     }
