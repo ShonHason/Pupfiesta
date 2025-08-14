@@ -1,4 +1,3 @@
-// androidMain/src/main/kotlin/org/example/project/presentation/screens/home/GardenScreen.kt
 package org.example.project.presentation.screens.home
 
 import android.Manifest
@@ -36,31 +35,35 @@ private enum class HomeTab(val label: String, val icon: @Composable () -> Unit) 
 fun GardenScreen(
     viewModel: DogGardensViewModel,
     onBack: () -> Unit,
-    onScan: () -> Unit
+    onScan: () -> Unit // kept for compatibility (not used below)
 ) {
-    var selectedTab by remember { mutableStateOf(HomeTab.Yard) }
+    // ---- Permission handling (single, consolidated) ----
+    val fine = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
+    val coarse = rememberPermissionState(Manifest.permission.ACCESS_COARSE_LOCATION)
+    var requestedOnce by remember { mutableStateOf(false) }
 
-    // 1) Location permission
-    val locationPerm = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
-    var hasAskedPermission by remember { mutableStateOf(false) }
-    LaunchedEffect(locationPerm.status) {
-        if (!locationPerm.status.isGranted && !hasAskedPermission) {
-            locationPerm.launchPermissionRequest()
-            hasAskedPermission = true
-        } else if (locationPerm.status.isGranted) {
-            viewModel.loadLocation()
+    LaunchedEffect(fine.status.isGranted, coarse.status.isGranted) {
+        when {
+            !fine.status.isGranted && !coarse.status.isGranted && !requestedOnce -> {
+                requestedOnce = true
+                fine.launchPermissionRequest() // user may grant approximate => COARSE
+            }
+            fine.status.isGranted || coarse.status.isGranted -> {
+                viewModel.loadLocation()
+            }
         }
     }
 
-    // 2) Observe VM state (avoid smart-cast issue by reading into locals)
-    val userLocState = viewModel.userLocation.collectAsState()
-    val userLoc = userLocState.value
+    var selectedTab by remember { mutableStateOf(HomeTab.Yard) }
 
+    // ---- Observe VM state ----
+    val userLoc by viewModel.userLocation.collectAsState()
+    val searchCenter by viewModel.searchCenter.collectAsState()
     val gardens by viewModel.gardens.collectAsState()
     val radiusMeters by viewModel.radiusMeters.collectAsState()
     val radiusKm = (radiusMeters / 1000f).coerceAtLeast(1f)
 
-    // 3) When radius or location changes, pull from DB and save
+    // Persist when radius or location changes
     LaunchedEffect(radiusMeters, userLoc) {
         if (userLoc != null) {
             viewModel.getGardens()
@@ -135,8 +138,7 @@ fun GardenScreen(
 
             // Map or loading
             Box(modifier = Modifier.weight(1f)) {
-                val loc = userLoc
-                if (loc == null) {
+                if (userLoc == null) {
                     Box(
                         Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -148,8 +150,12 @@ fun GardenScreen(
                         )
                     }
                 } else {
-                    // Camera stays on Tel Aviv; we add the user's marker too
-                    MapView(loc)
+                    MapView(
+                        center = searchCenter,
+                        parks = gardens,
+                        radiusMeters = radiusMeters,
+                        userLoc = userLoc
+                    )
                 }
             }
 
@@ -161,7 +167,7 @@ fun GardenScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Button(
-                    onClick = onScan,
+                    onClick = { viewModel.onScanClick() }, // keep UI dumb, VM does the work
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
@@ -172,7 +178,6 @@ fun GardenScreen(
         }
     }
 
-    // Back handler
     BackHandler { onBack() }
 
     // Clean up VM scope when screen is popped
@@ -182,29 +187,48 @@ fun GardenScreen(
 }
 
 @Composable
-private fun MapView(loc: Location) {
-    // Camera always centered on Tel Aviv
-    val telAviv = LatLng(32.0853, 34.7818)
-
+private fun MapView(
+    center: Location,
+    parks: List<org.example.project.domain.models.DogGarden>,
+    radiusMeters: Int,
+    userLoc: Location?
+) {
     val cameraState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(telAviv, 14f)
+        position = CameraPosition.fromLatLngZoom(LatLng(center.latitude, center.longitude), 14f)
+    }
+
+    LaunchedEffect(center) {
+        cameraState.position = CameraPosition.fromLatLngZoom(
+            LatLng(center.latitude, center.longitude),
+            14f
+        )
     }
 
     GoogleMap(
         modifier = Modifier.fillMaxSize(),
         cameraPositionState = cameraState
     ) {
-        // Marker for Tel Aviv (fixed center)
-        Marker(
-            state = rememberMarkerState(position = telAviv),
-            title = "Tel Aviv"
+        com.google.maps.android.compose.Circle(
+            center = LatLng(center.latitude, center.longitude),
+            radius = radiusMeters.toDouble(),
+            strokeWidth = 2f
         )
 
-        // Marker for the user's actual location
-        Marker(
-            state = rememberMarkerState(position = LatLng(loc.latitude, loc.longitude)),
-            title = "You are here"
-        )
+        userLoc?.let {
+            Marker(
+                state = rememberMarkerState(position = LatLng(it.latitude, it.longitude)),
+                title = "You are here"
+            )
+        }
+
+        parks.forEach { park ->
+            Marker(
+                state = rememberMarkerState(
+                    position = LatLng(park.location.latitude, park.location.longitude)
+                ),
+                title = park.name
+            )
+        }
     }
 }
 

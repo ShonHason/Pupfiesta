@@ -17,3 +17,4 @@ data class dogError(
 data class dbError(
     override val message: String
 ) : Error
+

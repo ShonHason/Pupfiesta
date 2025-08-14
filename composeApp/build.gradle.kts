@@ -1,6 +1,20 @@
 // composeApp/build.gradle.kts
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
+
+val localProps=Properties().apply {
+    val f = rootProject.file("local.properties")
+    if(f.exists()) {
+        (f.inputStream().use{load(it)})
+    }
+}
+val mapsKey: String = (
+        localProps.getProperty("GOOGLE_MAPS_API_KEY")
+            ?: project.findProperty("GOOGLE_MAPS_API_KEY") as String?
+            ?: System.getenv("GOOGLE_MAPS_API_KEY")
+            ?: ""
+        )
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -29,6 +43,7 @@ kotlin {
                 implementation(compose.preview)
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.lottie.compose)
+                implementation("io.insert-koin:koin-androidx-compose:3.5.6")
 
                 implementation(libs.androidx.material.icons.extended)
                 implementation(project.dependencies.platform(libs.firebase.bom))
@@ -86,7 +101,7 @@ android {
 
         // Maps key from gradle.properties → AndroidManifest
         manifestPlaceholders["com.google.android.geo.API_KEY"] =
-            project.property("GOOGLE_MAPS_API_KEY") as String
+           mapsKey
     }
 
     packaging {
@@ -104,6 +119,7 @@ android {
 }
 
 dependencies {
+
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.common.ktx)
     debugImplementation(compose.uiTooling)

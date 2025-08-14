@@ -11,7 +11,9 @@ import org.example.project.data.local.Result
 import org.example.project.domain.models.DogGarden
 import org.example.project.features.BaseViewModel
 import org.example.project.utils.Location
+import kotlinx.coroutines.withTimeoutOrNull
 import org.example.project.utils.getLocation
+
 
 class DogGardensViewModel(
     private val firebaseRepo: FirebaseRepository = RemoteFirebaseRepository(),
@@ -33,11 +35,23 @@ class DogGardensViewModel(
     private val _gardens = MutableStateFlow<List<DogGarden>>(emptyList())
     val gardens: StateFlow<List<DogGarden>> = _gardens.asStateFlow()
 
-        fun loadLocation() {
-            scope.launch {
-                try { _userLocation.value = getLocation() } catch (_: Throwable) { _userLocation.value = null }
+    private var autoCentered = false
+
+    fun loadLocation() {
+        scope.launch {
+            try {
+                val loc = getLocation()
+                _userLocation.value = loc
+                if (!autoCentered) {
+                    _searchCenter.value = loc
+                    autoCentered = true
+                }
+            } catch (_: Throwable) {
+                _userLocation.value = null
             }
         }
+    }
+
 
     fun setSearchCenter(location: Location) { _searchCenter.value = location }
     fun useTelAvivAsCenter() { _searchCenter.value = TEL_AVIV }
@@ -88,4 +102,18 @@ class DogGardensViewModel(
             }
         }
     }
+
+    fun onScanClick() {
+        scope.launch {
+
+            val fresh = runCatching { withTimeoutOrNull(1500) { getLocation() } }.getOrNull()
+            if (fresh != null) _userLocation.value = fresh
+
+            val center = fresh ?: _userLocation.value ?: TEL_AVIV
+            _searchCenter.value = center
+
+            refreshGardensFromGoogle()
+        }
+    }
+
 }
