@@ -41,7 +41,7 @@ fun Dog.toDto(ownerId: String): DogDto = DogDto(
     id         = this.id,
     name       = this.dogName,
     breed      = this.dogBreed,
-    weight     = this.dogWeight.toInt(),
+    weight     = this.dogWeight,
     imgUrl     = this.dogPictureUrl ?: "",
     isFriendly = this.isFriendly,
     isMale     = (this.dogGender == Gender.MALE),
