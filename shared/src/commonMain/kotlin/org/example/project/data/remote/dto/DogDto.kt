@@ -2,7 +2,6 @@ package org.example.project.data.remote.dto
 
 import kotlinx.serialization.Serializable
 import org.example.project.enum.Breed
-import org.example.project.enum.Gender
 
 @Serializable
 data class DogDto(

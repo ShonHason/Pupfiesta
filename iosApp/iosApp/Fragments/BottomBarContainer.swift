@@ -63,28 +63,4 @@ struct BottomBarContainer: View {
     }
 }
 
-struct BottomBarContainer_Previews: PreviewProvider {
-    static var previews: some View {
-        ZStack(alignment: .bottom) {
-            // sample gradient background
-            LinearGradient(
-                colors: [
-                    Color(red: 252/255, green: 241/255, blue: 196/255),
-                    Color(red: 176/255, green: 212/255, blue: 248/255)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
 
-            BottomBarContainer(
-                selectedTab: .constant(.profile),
-                onYardTap:    { print("🏠 tapped") },
-                onProfileTap: { print("👤 tapped") },
-                topPadding:    30,    // raise or lower icons
-                bottomPadding: 2,    // extra room below
-                backgroundColor: Color(red: 176/255, green: 212/255, blue: 248/255)
-            )
-        }
-    }
-}

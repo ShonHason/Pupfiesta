@@ -8,9 +8,11 @@
     import org.example.project.data.local.Result
     import org.example.project.data.remote.dto.DogDto
     import org.example.project.data.remote.dto.UserDto
+    import org.example.project.data.user.UserFormData
     import org.example.project.domain.models.AuthError
     import org.example.project.domain.models.DogGarden
     import org.example.project.domain.models.User
+    import org.example.project.enum.Gender
     import org.example.project.platformLogger
     import org.example.project.utils.extension.toDto
     import kotlin.math.*
@@ -63,44 +65,36 @@
             }
         }
 
-        override suspend fun getCurrentUser(): Result<FirebaseUser, AuthError> =
-            auth.currentUser?.let { Result.Success(it) }
-                ?: Result.Failure(AuthError("No signed-in user"))
+
 
         override suspend fun updateUser(user: User): Result<Unit, AuthError> {
             val fbUser = auth.currentUser ?: return Result.Failure(AuthError("No user signed in"))
-            return try {
-                if (fbUser.displayName != user.ownerName) fbUser.updateProfile(displayName = user.ownerName)
-                if (fbUser.email != user.email) fbUser.updateEmail(user.email)
 
+            return try {
+                // 1) Keep Firebase Auth profile in sync (optional but nice)
+                if (fbUser.displayName != user.ownerName) {
+                    fbUser.updateProfile(displayName = user.ownerName)
+                }
+                if (fbUser.email != user.email) {
+                    fbUser.updateEmail(user.email)
+                }
+
+                // 2) Write a fully-typed DTO to Firestore (NO Map<String, Any>)
                 val uid = fbUser.uid
                 val userRef = Firebase.firestore.collection("Users").document(uid)
-                val existingDto: UserDto = userRef.get().data()
 
-                val oldDogs = existingDto.dogList
-                val newDto = user.toDto()
-                val newDogs = newDto.dogList
+                // Ensure the domain model has the correct id before mapping
+                val dto: UserDto = user.copy(id = uid).toDto()
 
-                val needsDogUpdate = oldDogs.size != newDogs.size ||
-                        oldDogs.zip(newDogs).any { (o, n) ->
-                            o.name != n.name ||
-                                    o.breed != n.breed ||
-                                    o.weight != n.weight ||
-                                    o.imgUrl != n.imgUrl ||
-                                    o.isFriendly != n.isFriendly ||
-                                    o.isMale != n.isMale ||
-                                    o.isNeutered != n.isNeutered
-                        }
-
-                val payload = mutableMapOf<String, Any>("email" to user.email, "name" to user.ownerName)
-                if (needsDogUpdate) payload["dogList"] = newDogs
-                userRef.set(payload, merge = true)
+                // Writing a typed object gives the serializer (UserDto) explicitly
+                userRef.set(dto, merge = true)
 
                 Result.Success(Unit)
             } catch (e: Exception) {
                 Result.Failure(AuthError("Update failed: ${e.message}"))
             }
         }
+
 
         override suspend fun logout(): Result<Unit, AuthError> = try {
             auth.signOut(); Result.Success(Unit)
@@ -159,4 +153,34 @@
             val c = 2 * atan2(sqrt(a), sqrt(1 - a))
             return 6_371_000.0 * c
         }
+
+
+
+        override suspend fun getUserProfile(): Result<UserDto, AuthError> {
+            platformLogger("PUP", "getUserProfile called")
+            val uid = Firebase.auth.currentUser?.uid
+                ?: return Result.Failure(AuthError("Not signed in"))
+
+            return try {
+                val ref = Firebase.firestore.collection("Users").document(uid)
+                val snap = ref.get()
+
+                if (!snap.exists) {
+                    Result.Failure(AuthError("No profile for uid=$uid"))
+                } else {
+                    // IMPORTANT: ask for a concrete type so a serializer is known
+                    val dto: UserDto = snap.data()   // <-- uses UserDto serializer
+                    Result.Success(dto)
+                }
+            } catch (t: Throwable) {
+                Result.Failure(AuthError(t.message ?: "Unknown error"))
+            }
+        }
+
     }
+
+
+
+
+
+

@@ -1,5 +1,6 @@
 package org.example.project.features.registration
 
+import dev.gitlive.firebase.auth.FirebaseUser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -8,9 +9,12 @@ import org.example.project.data.firebase.FirebaseRepository
 import org.example.project.data.firebase.RemoteFirebaseRepository
 import org.example.project.data.local.Result
 import org.example.project.data.remote.dto.DogDto
+import org.example.project.data.remote.dto.UserDto
 import org.example.project.data.user.UserEvent
 import org.example.project.data.user.UserFormData
 import org.example.project.data.user.UserState
+import org.example.project.domain.models.AuthError
+import org.example.project.domain.models.User
 import org.example.project.enum.Gender
 import org.example.project.features.BaseViewModel
 import org.example.project.platformLogger
@@ -22,6 +26,48 @@ class UserViewModel(
     private val _userState =
         MutableStateFlow<UserState>(UserState.Initial(UserFormData()))
     val userState: StateFlow<UserState> = _userState
+
+
+
+    fun setEmail(v: String) =
+        onEvent(UserEvent.EmailChanged(v))
+
+    fun setPassword(v: String) =
+        onEvent(UserEvent.PasswordChanged(v))
+
+    fun setOwnerName(v: String) =
+        onEvent(UserEvent.OwnerNameChanged(v))
+
+    fun setDogName(v: String) =
+        onEvent(UserEvent.DogNameChanged(v))
+
+    fun setDogBreed(breed: org.example.project.enum.Breed) =
+        onEvent(UserEvent.DogBreedChanged(breed))
+
+    fun setDogGender(gender: org.example.project.enum.Gender) =
+        onEvent(UserEvent.DogGenderChanged(gender))
+
+    fun setIsFriendly(v: Boolean) =
+        onEvent(UserEvent.IsFriendlyChanged(v))
+
+    fun setIsNeutered(v: Boolean) =
+        onEvent(UserEvent.IsNeuteredChanged(v))
+
+    fun setDogWeight(kg: Int) =
+        onEvent(UserEvent.DogWeightChanged(kg))
+
+    fun setDogPictureUrl(url: String?) =
+        onEvent(UserEvent.DogPictureUrlChanged(url))
+
+    // --- Actions ---
+    fun reset() =
+        onEvent(UserEvent.ResetState)
+
+    fun signUp() =
+        onEvent(UserEvent.OnSignUp)
+
+    fun signIn() =
+        onEvent(UserEvent.OnSignIn)
 
     fun onEvent(event: UserEvent) {
         when (event) {
@@ -41,6 +87,28 @@ class UserViewModel(
         }
     }
 
+
+
+    @Throws(Exception::class)
+    suspend fun getUserOrThrow(): UserDto {
+        return when (val r = firebaseRepo.getUserProfile()) {
+            is Result.Success -> r.data ?: throw Exception("Empty user payload")
+            is Result.Failure -> throw Exception(r.error?.message ?: "Failed to get current user")
+        }
+    }
+
+    suspend fun getUser(): Result<UserDto, AuthError> {
+        val r = firebaseRepo.getUserProfile()
+        when (r) {
+            is Result.Success -> {
+                _userState.value = UserState.Loaded
+            }
+            is Result.Failure -> {
+                _userState.value = UserState.Error(r.error?.message ?: "Login failed")
+            }
+        }
+        return r
+    }
 
 
 
