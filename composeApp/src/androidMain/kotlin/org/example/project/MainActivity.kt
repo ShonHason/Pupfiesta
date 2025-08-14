@@ -11,15 +11,20 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.FirebaseApp
-import org.example.project.data.dogGardens.GoogleGardensRepo
+import org.koin.compose.koinInject
+
 import org.example.project.data.firebase.FirebaseRepository
 import org.example.project.data.firebase.RemoteFirebaseRepository
 import org.example.project.data.dogGardens.DogGardensViewModel
+import org.example.project.di.initKoin
+import org.example.project.di.startKoinIfNeeded
+
 import org.example.project.features.registration.UserViewModel
 import org.example.project.presentation.screens.home.GardenScreen
 import org.example.project.presentation.screens.landing.LandingScreen
 import org.example.project.presentation.screens.login.LoginScreen
 import org.example.project.presentation.screens.registration.RegistrationScreen
+import org.example.project.utils.appContext
 import org.example.project.utils.httpClient
 
 class MainActivity : ComponentActivity() {
@@ -30,28 +35,27 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        appContext = applicationContext
         // Init Firebase SDK
         FirebaseApp.initializeApp(this)
+        startKoinIfNeeded(applicationContext)
         enableEdgeToEdge()
 
         // Create shared repo once (not composable)
         val firebaseRepo: FirebaseRepository = RemoteFirebaseRepository()
-        val placesKey = mapsApiKeyFromManifest()
+
+
 
         setContent {
             val navController = rememberNavController()
 
+
             // Build the Google repo INSIDE a composable (or you can build it above without remember)
-            val gardensRepo = remember {
-                GoogleGardensRepo(
-                    client = httpClient(),
-                    apiKey = placesKey
-                )
-            }
+
 
             val userVm = remember { UserViewModel(firebaseRepo) }
-            val gardenVm = remember { DogGardensViewModel(firebaseRepo, gardensRepo) }
+            val gardenVm: DogGardensViewModel=koinInject()
+
 
             NavHost(navController = navController, startDestination = "landing") {
                 composable("landing") {
@@ -93,7 +97,7 @@ class MainActivity : ComponentActivity() {
                     GardenScreen(
                         viewModel = gardenVm,
                         onBack    = { navController.popBackStack() },
-                        onScan    = { /* handle scan action */ }
+                        onScan    = {  gardenVm.onScanClick()},
                     )
                 }
             }

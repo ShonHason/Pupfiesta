@@ -12,7 +12,7 @@ import kotlinx.serialization.json.Json
 import org.example.project.domain.models.DogGarden
 import org.example.project.domain.models.Location
 
-class GoogleGardensRepo(
+class GoogleGardensRepository(
     private val client: HttpClient,
     private val apiKey: String
 ) : GardensRepository {
@@ -36,8 +36,8 @@ class GoogleGardensRepo(
         val resp: NearbySearchResponse = http.get(BASE) {
             parameter("location", "$latitude,$longitude")
             parameter("radius", radiusMeters)
-            parameter("type", "park")
-            parameter("keyword", "dog park|גינת כלבים")
+           // parameter("type", "park")
+            parameter("keyword", "Dog park")
             parameter("language", language)
             parameter("key", apiKey)
         }.body()

@@ -2,6 +2,7 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -56,6 +57,8 @@ kotlin {
                 implementation(libs.firebase.firestore)
                 implementation(libs.firebase.common)
                 implementation(libs.firebase.auth)
+                implementation("io.insert-koin:koin-core:3.5.6")
+
 
                 // Serialization
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinxJson")
@@ -74,6 +77,7 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(libs.kotlinx.coroutines.android)
+                implementation("io.insert-koin:koin-android:3.5.6")           // for androidContext()
 
                 // Ktor Android engine
                 implementation("io.ktor:ktor-client-okhttp:$ktor")
@@ -98,9 +102,19 @@ kotlin {
 
 android {
     namespace = "org.example.project.shared"
+    buildFeatures{buildConfig= true}
     compileSdk = libs.versions.android.compileSdk.get().toInt()
     defaultConfig {
         minSdk = libs.versions.android.minSdk.get().toInt()
+        val props = Properties().apply {
+            val file = rootProject.file("local.properties")
+            if (file.exists()) file.inputStream().use { load(it) }
+        }
+        val googleMapsKey = props.getProperty("GOOGLE_MAPS_API_KEY") ?: ""
+
+        // Expose to BuildConfig
+        buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsKey\"")
+
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
