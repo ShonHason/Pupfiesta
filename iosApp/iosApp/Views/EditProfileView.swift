@@ -36,9 +36,11 @@ private func breedByName(_ name: String, from breeds: [Breed]) -> Breed? {
 
 // MARK: - UI model
 
+// EditProfileView.swift
+
 private struct DogCardModel: Identifiable {
-    var id: String            // local UI id (unique)
-    var backendId: String     // Firestore id; "" for new
+    var id: String
+    var backendId: String
     var name: String
     var breed: Breed?
     var weight: Int
@@ -46,8 +48,11 @@ private struct DogCardModel: Identifiable {
     var isNeutered: Bool
     var isFriendly: Bool
     var localImage: UIImage?
-    var isTemp: Bool { backendId.isEmpty }
+
+    // ONLY actual temp UI items are "temp"
+    var isTemp: Bool { backendId.isEmpty && id.hasPrefix("temp-") }
 }
+
 
 // MARK: - View
 
