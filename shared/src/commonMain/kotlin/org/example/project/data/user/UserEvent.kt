@@ -12,7 +12,8 @@ sealed interface UserEvent{
     data class IsFriendlyChanged(val isFriendly: Boolean): UserEvent
     data class IsNeuteredChanged(val isNeutered: Boolean): UserEvent
     data class DogWeightChanged(val dogWeight: Int): UserEvent
-    data class DogPictureUrlChanged(val dogPictureUrl: String?): UserEvent
+    data class DogPictureUrlChanged(val url: String?): UserEvent
+
     data object ResetState : UserEvent
     data object OnSignUp : UserEvent
     data object OnSignIn : UserEvent

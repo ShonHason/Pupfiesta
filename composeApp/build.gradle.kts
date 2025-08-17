@@ -3,12 +3,15 @@ import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
-val localProps=Properties().apply {
+val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
-    if(f.exists()) {
-        (f.inputStream().use{load(it)})
+    if (f.exists()) {
+        (f.inputStream().use { load(it) })
     }
 }
+
+
+
 val mapsKey: String = (
         localProps.getProperty("GOOGLE_MAPS_API_KEY")
             ?: project.findProperty("GOOGLE_MAPS_API_KEY") as String?
@@ -32,7 +35,7 @@ repositories {
 kotlin {
     androidTarget {
         @OptIn(ExperimentalKotlinGradlePluginApi::class)
-        compilerOptions { jvmTarget.set(JvmTarget.JVM_11) }
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
     }
 
     sourceSets {
@@ -46,9 +49,10 @@ kotlin {
                 implementation("io.insert-koin:koin-androidx-compose:3.5.6")
 
                 implementation(libs.androidx.material.icons.extended)
-                implementation(project.dependencies.platform(libs.firebase.bom))
-                implementation(libs.firebase.auth)
-                implementation(libs.firebase.common)
+                val gitlive = "2.2.0"
+                implementation("dev.gitlive:firebase-common:$gitlive")
+                implementation("dev.gitlive:firebase-auth:$gitlive")
+                implementation("dev.gitlive:firebase-firestore:$gitlive")
                 implementation(libs.coil.compose)
                 implementation("androidx.activity:activity-compose:1.7.2")
                 implementation("androidx.navigation:navigation-compose:2.7.0")
@@ -100,29 +104,27 @@ android {
         versionName = "1.0"
 
         // Maps key from gradle.properties → AndroidManifest
-        manifestPlaceholders["com.google.android.geo.API_KEY"] =
-           mapsKey
+        manifestPlaceholders["com.google.android.geo.API_KEY"] = mapsKey
+
+
     }
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
 
-    buildTypes {
-        getByName("release") { isMinifyEnabled = false }
-    }
+
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 
 dependencies {
+    implementation(libs.cloudinary.android)
 
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.common.ktx)
+
     debugImplementation(compose.uiTooling)
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.google.firebase.auth)
+
 }

@@ -35,10 +35,14 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        appContext = applicationContext
-        // Init Firebase SDK
-        FirebaseApp.initializeApp(this)
+        appContext=applicationContext
         startKoinIfNeeded(applicationContext)
+        FirebaseApp.initializeApp(this)
+
+
+        // Init Firebase SDK
+
+
         enableEdgeToEdge()
 
         // Create shared repo once (not composable)
