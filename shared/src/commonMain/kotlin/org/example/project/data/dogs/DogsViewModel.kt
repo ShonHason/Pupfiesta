@@ -12,6 +12,7 @@ import org.example.project.data.remote.dto.UserDto
 import org.example.project.domain.models.AuthError
 import org.example.project.domain.models.dogError
 import org.example.project.features.BaseViewModel
+import org.example.project.platformLogger
 
 /**
  * Dogs ViewModel – mirrors your UserViewModel.
@@ -68,6 +69,7 @@ class DogsViewModel(
     }
 
     private fun loadFormFromDto(d: DogDto) {
+        platformLogger("PUP", "Loading dog form from DTO: $d")
         updateState {
             copy(
                 id = d.id.orEmpty(),
@@ -161,6 +163,7 @@ class DogsViewModel(
     @Throws(Exception::class)
     suspend fun getUserOrThrow(): UserDto {
         return when (val r = firebaseRepo.getUserProfile()) {
+
             is Result.Success -> r.data ?: throw Exception("Empty user payload")
             is Result.Failure -> throw Exception(r.error?.message ?: "Failed to get current user")
         }
