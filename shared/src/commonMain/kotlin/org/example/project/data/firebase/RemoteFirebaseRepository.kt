@@ -111,47 +111,74 @@ class RemoteFirebaseRepository : FirebaseRepository {
     // Dogs (update Dogs collection + mirror in Users dogList)
     // ──────────────────────────────
 
-    override suspend fun addDogAndLinkToUser(dog: DogDto): Result<DogDto, dogError> {
-        return try {
-            val uid = currentUid()
+// RemoteFirebaseRepository.kt  (inside addDogAndLinkToUser)
 
-            // Create dog with generated id
-            val draft = dog.copy(id = "", ownerId = uid)
-            val ref = dogsCol.add(draft) // suspend, no await()
-            val newId = ref.id
-            val saved = draft.copy(id = newId)
+    override suspend fun addDogAndLinkToUser(dog: DogDto): Result<DogDto, dogError> = try {
+        val uid = currentUid()
 
-            // Mirror into user's dogList
-            val userRef = usersCol.document(uid)
-            val snap = userRef.get()
-            val user = if (snap.exists) snap.data<UserDto>()
-            else UserDto(email = auth.currentUser?.email ?: "", name = auth.currentUser?.displayName ?: "", dogList = emptyList())
+        // create dog in Dogs with generated id
+        val draft = dog.copy(id = "", ownerId = uid)
+        val ref = dogsCol.add(draft)
+        val newId = ref.id
+        val saved = draft.copy(id = newId)
 
-            val newList = (user.dogList ?: emptyList())
-                .filter { it.id != newId } + saved
+        // mirror into user.dogList (REPLACE any legacy entry: same name + blank id)
+        val userRef = usersCol.document(uid)
+        val snap = userRef.get()
+        val user = if (snap.exists) snap.data<UserDto>()
+        else UserDto(email = auth.currentUser?.email ?: "", name = auth.currentUser?.displayName ?: "", dogList = emptyList())
 
-            userRef.set(user.copy(dogList = newList), merge = true)
+        val newList = (user.dogList ?: emptyList())
+            .filterNot {
+                it.id == newId || (it.id.isNullOrBlank() && it.name.equals(draft.name, ignoreCase = true))
+            } + saved
 
-            Result.Success(saved)
-        } catch (e: Exception) {
-            Result.Failure(dogError(e.message ?: "Add dog failed"))
-        }
+        userRef.set(user.copy(dogList = newList), merge = true)
+        Result.Success(saved)
+    } catch (e: Exception) {
+        Result.Failure(dogError(e.message ?: "Add dog failed"))
     }
 
     override suspend fun updateDogAndUser(dog: DogDto): Result<Unit, dogError> {
         return try {
             val uid = currentUid()
-            val id = dog.id ?: return Result.Failure(dogError("Dog id missing"))
+
+            // Prefer dog.id, else resolve by (ownerId + name)
+            val resolvedId: String = if (!dog.id.isNullOrBlank()) {
+                dog.id!!
+            } else {
+                val q = dogsCol
+                    .where { "ownerId" equalTo uid }
+                    .where { "name" equalTo dog.name }
+                    .get()
+                q.documents.firstOrNull()?.id
+                    ?: throw IllegalStateException("Dog id missing and no existing dog matched by name")
+            }
+
+            val withId = dog.copy(id = resolvedId, ownerId = uid)
 
             // Update Dogs/{id}
-            dogsCol.document(id).set(dog, merge = true)
+            dogsCol.document(resolvedId).set(withId, merge = true)
 
-            // Replace in Users/{uid}.dogList
+            // Mirror into Users/{uid}.dogList
             val userRef = usersCol.document(uid)
             val snap = userRef.get()
             if (snap.exists) {
                 val user = snap.data<UserDto>()
-                val updated = (user.dogList ?: emptyList()).map { if (it.id == id) dog else it }
+                val src = user.dogList ?: emptyList()
+
+                val updated =
+                    if (src.any { it.id == resolvedId }) {
+                        src.map { if (it.id == resolvedId) withId else it }
+                    } else if (src.any { it.id.isNullOrBlank() && it.name.equals(dog.name, ignoreCase = true) }) {
+                        // backfill legacy entry that had no id
+                        src.map {
+                            if (it.id.isNullOrBlank() && it.name.equals(dog.name, ignoreCase = true)) withId else it
+                        }
+                    } else {
+                        src + withId
+                    }
+
                 userRef.set(user.copy(dogList = updated), merge = true)
             }
 
@@ -161,15 +188,16 @@ class RemoteFirebaseRepository : FirebaseRepository {
         }
     }
 
+
     override suspend fun deleteDogAndUser(dogId: String): Result<Unit, dogError> {
-        platformLogger("FIREBASE", "Deleting dog $dogId")
-        return try {
-            val uid = currentUid()
+            platformLogger("FIREBASE", "Deleting dog $dogId")
+            return try {
+                val uid = currentUid()
 
-            // Delete from Dogs
-            dogsCol.document(dogId).delete()
+                // Delete from Dogs
+                dogsCol.document(dogId).delete()
 
-            // Remove from user's dogList
+                // Remove from user's dogList
             val userRef = usersCol.document(uid)
             val snap = userRef.get()
             if (snap.exists) {
