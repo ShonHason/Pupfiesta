@@ -1,6 +1,5 @@
 // domain/models/Location.kt
 package org.example.project.domain.models
-
 import kotlinx.serialization.Serializable
 
 @Serializable

@@ -23,6 +23,7 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import kotlinx.coroutines.cancel
 import org.example.project.data.dogGardens.DogGardensViewModel
+import org.example.project.platformLogger
 import org.example.project.utils.Location
 
 private enum class HomeTab(val label: String, val icon: @Composable () -> Unit) {
@@ -66,8 +67,8 @@ fun GardenScreen(
     // Persist when radius or location changes
     LaunchedEffect(radiusMeters, userLoc) {
         if (userLoc != null) {
-            viewModel.getGardens()
-            viewModel.saveGardens()
+           // viewModel.refreshAndSave()
+                viewModel.getGardens()
         }
     }
 

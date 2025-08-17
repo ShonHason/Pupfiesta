@@ -15,6 +15,7 @@ import org.example.project.data.user.UserFormData
 import org.example.project.data.user.UserState
 import org.example.project.domain.models.AuthError
 import org.example.project.domain.models.User
+import org.example.project.domain.models.dogError
 import org.example.project.enum.Gender
 import org.example.project.features.BaseViewModel
 import org.example.project.platformLogger
@@ -218,6 +219,8 @@ class UserViewModel(
             }
         }
     }
+
+
 
     private fun validateEmail(email: String): Boolean {
         val regex = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")

@@ -2,9 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>GOOGLE_PLACES_API_KEY</key>
-	<string>AIzaSyC3aJ4KSuekabK-4lupb1pfYis3YnZLwxQ</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We use your location to show nearby dog parks.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>GOOGLE_PLACES_API_KEY</key>
+	<string>AIzaSyC3aJ4KSuekabK-4lupb1pfYis3YnZLwxQ</string>
 </dict>
 </plist>
