@@ -1,27 +1,27 @@
 package org.example.project
 
-
-
 import android.app.Application
-import com.google.firebase.FirebaseApp
-import org.example.project.di.initKoin
-import org.koin.android.ext.koin.androidContext
-import org.example.project.utils.appContext  // from your androidMain getLocation actual
+import android.content.Context
+import android.util.Log
+import com.cloudinary.android.MediaManager
+import org.example.project.shared.BuildConfig
 
 class MyLocationApp : Application() {
+    companion object {
+        lateinit var ctx: Context
+            private set
+    }
+
     override fun onCreate() {
         super.onCreate()
-
-        // expose a safe appContext for getLocation()
-        appContext = applicationContext
-
-        // start DI (shared Koin graph)
-        initKoin {
-            androidContext(this@MyLocationApp)
-        }
-
-        // optional: Firebase here instead of in Activity
-        FirebaseApp.initializeApp(this)
-        android.util.Log.d("GetLocation", "MyLocationApp.onCreate (appContext set)")
+        ctx = applicationContext
+        val config = hashMapOf(
+            "cloud_name" to BuildConfig.CLOUD_NAME,
+            "secure" to "true"
+        )
+        MediaManager.init(this, config)
+        val cloudinary = MediaManager.get().cloudinary
+        Log.d("MyLocationApp", "cloud_name=${cloudinary.config.cloudName} api_key=${cloudinary.config.apiKey}")
+        check(cloudinary.config.apiKey.isNullOrBlank()) { "api_key must NOT be set for unsigned uploads" }
     }
 }

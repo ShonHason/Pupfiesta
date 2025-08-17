@@ -1,4 +1,5 @@
 // shared/build.gradle.kts
+import org.gradle.kotlin.dsl.implementation
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
@@ -46,6 +47,7 @@ kotlin {
         // ---- versions ----
         val ktor = "2.3.12"
         val kotlinxJson = "1.6.0"
+        val gitlive = "2.2.0"
 
         // ---- common ----
         val commonMain by getting {
@@ -53,10 +55,11 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.core)
 
                 // Firebase (GitLive) via your version catalog BOM
-                implementation(project.dependencies.platform(libs.firebase.bom))
-                implementation(libs.firebase.firestore)
-                implementation(libs.firebase.common)
-                implementation(libs.firebase.auth)
+//                implementation(project.dependencies.platform(libs.firebase.bom))
+
+                implementation("dev.gitlive:firebase-common:$gitlive")
+                implementation("dev.gitlive:firebase-auth:$gitlive")
+                implementation("dev.gitlive:firebase-firestore:$gitlive")
                 implementation("io.insert-koin:koin-core:3.5.6")
 
 
@@ -78,7 +81,7 @@ kotlin {
             dependencies {
                 implementation(libs.kotlinx.coroutines.android)
                 implementation("io.insert-koin:koin-android:3.5.6")           // for androidContext()
-
+                implementation(libs.cloudinary.android)
                 // Ktor Android engine
                 implementation("io.ktor:ktor-client-okhttp:$ktor")
 
@@ -87,6 +90,7 @@ kotlin {
 
                 // REQUIRED for viewModelScope in androidMain actuals
                 implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
+                implementation("com.google.android.gms:play-services-location:21.3.0")
             }
         }
 
@@ -111,11 +115,19 @@ android {
             if (file.exists()) file.inputStream().use { load(it) }
         }
         val googleMapsKey = props.getProperty("GOOGLE_MAPS_API_KEY") ?: ""
+        val cloudName = props.getProperty("CLOUD_NAME") ?: ""
+        val cloudApiKey = props.getProperty("CLOUD_API_KEY") ?: ""
+        val cloudApiSecret = props.getProperty("CLOUD_API_SECRET") ?: ""
 
         // Expose to BuildConfig
         buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsKey\"")
+        buildConfigField("String", "CLOUD_NAME", "\"$cloudName\"")
+        buildConfigField("String", "CLOUD_API_KEY", "\"$cloudApiKey\"")
+        buildConfigField("String", "CLOUD_API_SECRET", "\"$cloudApiSecret\"")
 
     }
+
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

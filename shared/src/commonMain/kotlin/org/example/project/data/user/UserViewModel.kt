@@ -3,6 +3,7 @@ package org.example.project.features.registration
 import dev.gitlive.firebase.auth.FirebaseUser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.example.project.data.firebase.FirebaseRepository
@@ -20,7 +21,10 @@ import org.example.project.features.BaseViewModel
 import org.example.project.platformLogger
 
 class UserViewModel(
-    private val firebaseRepo: FirebaseRepository = RemoteFirebaseRepository()
+    private val firebaseRepo: FirebaseRepository = RemoteFirebaseRepository(),
+
+
+
 ) : BaseViewModel() {
 
     private val _userState =
@@ -80,10 +84,10 @@ class UserViewModel(
             is UserEvent.IsFriendlyChanged -> updateState { copy(isFriendly = event.isFriendly) }
             is UserEvent.IsNeuteredChanged -> updateState { copy(isNeutered = event.isNeutered) }
             is UserEvent.DogWeightChanged  -> updateState { copy(dogWeight = event.dogWeight) }
-            is UserEvent.DogPictureUrlChanged -> updateState { copy(dogPictureUrl = event.dogPictureUrl) }
             UserEvent.ResetState           -> resetState()
             UserEvent.OnSignUp             -> validateAndSubmitForm()
             is UserEvent.OnSignIn -> userSignIn()
+            is UserEvent.DogPictureUrlChanged -> TODO()
         }
     }
 
@@ -109,6 +113,7 @@ class UserViewModel(
         }
         return r
     }
+
 
 
 

@@ -14,5 +14,6 @@ data class UserFormData(
     val dogWeight: Int = 10,
     val isNeutered: Boolean = false,
     val isFriendly: Boolean = false,
-    val errors: List<String> = emptyList()
+    val errors: List<String> = emptyList(),
+
 )
