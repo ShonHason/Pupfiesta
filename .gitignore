@@ -20,4 +20,4 @@ google-services.json
 composeApp_dependencies.txt
 shared_dependencies.txt
 GoogleService-Info.plist
-
+**/GoogleService-Info.plist
