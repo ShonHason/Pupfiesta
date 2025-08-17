@@ -35,7 +35,7 @@ class GoogleGardensRepository(
 
         val resp: NearbySearchResponse = http.get(BASE) {
             parameter("location", "$latitude,$longitude")
-            parameter("radius", radiusMeters)
+            parameter("radius", 50000)
            // parameter("type", "park")
             parameter("keyword", "Dog park")
             parameter("language", language)

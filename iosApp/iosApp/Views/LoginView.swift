@@ -36,10 +36,10 @@ struct LoginView: View {
             // Hidden link to TabsRootView after successful sign-in
             NavigationLink(
                 destination: TabsRootView(
-                    userVM: loginViewModel,
+                    dogsVM: DogsViewModel(firebaseRepo: RemoteFirebaseRepository()),
                     gardensVM: DogGardensViewModel(
                         firebaseRepo: RemoteFirebaseRepository(),
-                        gardensRepo: GoogleGardensRepo(client: httpClient(), apiKey: placesKey),
+                        gardensRepo: GoogleGardensRepository(client: httpClient(), apiKey: placesKey),
                         defaultLanguage: "he"
                     )
                 ),

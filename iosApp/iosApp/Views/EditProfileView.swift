@@ -1,268 +1,641 @@
-    //
-    //  EditProfileView.swift
-    //  iosApp
-    //
+//
+//  EditProfileView.swift
+//  iosApp
+//
 
-    import SwiftUI
-    import PhotosUI
-    import Shared
+import SwiftUI
+import Shared
+import UIKit
 
-    struct EditProfileView: View {
-        // Injected KMM VM (use the SAME instance you created after login)
-        let userViewModel: UserViewModel
+// MARK: - Breed helpers
+private let screenGradient = LinearGradient(
+    colors: [
+        Color(red: 252/255, green: 241/255, blue: 196/255),
+        Color(red: 176/255, green: 212/255, blue: 248/255)
+    ],
+    startPoint: .topLeading,
+    endPoint: .bottomTrailing
+)
 
-        // View-model state (from your KMM StateFlow)
-        @State private var vmState: UserState?
+private func allBreeds() -> [Breed] {
+    let arr = SwiftBridge().allBreeds()
+    var out: [Breed] = []
+    let n = Int(arr.size)
+    out.reserveCapacity(n)
+    for i in 0..<n {
+        if let b = arr.get(index: Int32(i)) as? Breed { out.append(b) }
+    }
+    return out
+}
+private func breedTitle(_ b: Breed) -> String {
+    b.name.lowercased().replacingOccurrences(of: "_", with: " ").capitalized
+}
+private func breedByName(_ name: String, from breeds: [Breed]) -> Breed? {
+    breeds.first { $0.name == name }
+}
 
-        // Editable fields (local UI copy)
-        @State private var username: String = ""   // derived: ownerName or email
-        @State private var email: String = ""
-        @State private var ownerName: String = ""
-        @State private var dogName: String = ""
-        @State private var isMale: Bool = true
-        @State private var isNeutered: Bool = true
-        @State private var isFriendly: Bool = true
-        @State private var weight: Int = 25
-        
-        // Photo picker
-        @State private var showingPhotoPicker = false
-        @State private var pickedUIImage: UIImage?
-        @State private var dogImage: Image = Image(systemName: "dog.fill")
+// MARK: - UI model
 
-        // Observation + errors
-        @State private var observeTask: Task<Void, Never>? = nil
-        @State private var errorMessage = ""
+private struct DogCardModel: Identifiable {
+    var id: String            // local UI id (unique)
+    var backendId: String     // Firestore id; "" for new
+    var name: String
+    var breed: Breed?
+    var weight: Int
+    var isMale: Bool
+    var isNeutered: Bool
+    var isFriendly: Bool
+    var localImage: UIImage?
+    var isTemp: Bool { backendId.isEmpty }
+}
 
-        // Background
-        private let fullPageGradient = LinearGradient(
-            colors: [
-                Color(red: 252/255, green: 241/255, blue: 196/255),
-                Color(red: 176/255, green: 212/255, blue: 248/255)
-            ],
-            startPoint: .top, endPoint: .bottom
+// MARK: - View
+
+@MainActor
+struct EditProfileView: View {
+    let dogsViewModel: DogsViewModel
+
+    // cached breeds
+    @State private var breeds: [Breed] = allBreeds()
+
+    @State private var ownerName = ""
+    @State private var email = ""
+
+    @State private var dogs: [DogCardModel] = []
+    @State private var selectedDogId: String? = nil
+
+    // editor state
+    @State private var isEditing = false
+    @State private var workingDog: DogCardModel? = nil
+    @State private var selectedBreedName: String = ""
+    @State private var originalDogBeforeEdit: DogCardModel? = nil   // snapshot for Cancel
+
+    // delete confirm
+    @State private var showDeleteConfirm = false
+
+    // photo
+    @State private var showImagePicker = false
+    @State private var pickedUIImage: UIImage? = nil
+
+    // ux
+    @State private var busy = false
+    @State private var errorMessage = ""
+
+    private var addingTempDog: Bool { dogs.contains { $0.isTemp } }
+
+    private func unwrap<T>(_ binding: Binding<T?>, defaultValue: @autoclosure @escaping () -> T) -> Binding<T> {
+        Binding(
+            get: { binding.wrappedValue ?? defaultValue() },
+            set: { binding.wrappedValue = $0 }
         )
+    }
 
-        var body: some View {
-            ZStack {
-                fullPageGradient.ignoresSafeArea()
+    var body: some View {
+        ZStack {
+            screenGradient.ignoresSafeArea()   // background layer
 
-                ScrollView {
-                    VStack(spacing: 24) {
-                        Spacer().frame(height: 40)
-
-                        // Avatar
-                        dogImage
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 120, height: 120)
-                            .clipShape(Circle())
-                            .background(Circle().fill(Color.white).frame(width: 128, height: 128))
-                            .overlay(Circle().stroke(Color.blue, lineWidth: 4))
-                            .shadow(radius: 5)
-                            .onTapGesture { showingPhotoPicker = true }
-
-                        // Fields
-                        VStack(spacing: 16) {
-                            HStack {
-                                Text("email:")
-                                    .frame(width: 110, alignment: .leading)
-                                Text(email)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(8)
-                                    .background(Color.white.opacity(0.6))
-                                    .cornerRadius(8)
-                            }
-
-                            labeledField("Owner Name:", text: $ownerName)
-                                .onChange(of: ownerName) { _ in userViewModel.setOwnerName(v: ownerName) }
-
-                            labeledField("Dog Name:", text: $dogName)
-                                .onChange(of: dogName) { _ in userViewModel.setDogName(v: dogName) }
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    OwnerHeader(ownerName: ownerName, email: email)
                         .padding(.horizontal)
 
-                        // Gender
-                        HStack {
-                            Text("Gender:")
-                                .frame(width: 110, alignment: .leading)
-                            Spacer()
-                            Button {
-                                isMale.toggle()
-                                userViewModel.setDogGender(gender: isMale ? .male : .female)
-                            } label: {
-                                Text(isMale ? "Male" : "Female")
-                                    .font(.subheadline).fontWeight(.semibold)
-                                    .frame(width: 80, height: 32)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .fill(isMale ? Color.blue.opacity(0.2) : Color.pink.opacity(0.2))
-                                    )
-                                    .foregroundColor(isMale ? .blue : .pink)
-                            }
-                        }
+                    Text("Dogs")
+                        .font(.headline)
                         .padding(.horizontal)
 
-                        // Toggles
-                        VStack(spacing: 12) {
-                            Toggle("Neutered:", isOn: $isNeutered)
-                                .onChange(of: isNeutered) { _ in userViewModel.setIsNeutered(v: isNeutered) }
+                    DogGrid(
+                        dogs: dogs,
+                        selectedDogId: selectedDogId,
+                        busy: busy,
+                        onSelect: handleSelectDog(_:),
+                        onAdd: handleAddDog
+                    )
+                    .padding(.horizontal)
 
-                            Toggle("Friendly:", isOn: $isFriendly)
-                                .onChange(of: isFriendly) { _ in userViewModel.setIsFriendly(v: isFriendly) }
-                        }
+                    if workingDog != nil {
+                        DogDetailsCard(
+                            working: unwrap($workingDog, defaultValue: placeholderDog()),
+                            isEditing: $isEditing,
+                            selectedBreedName: $selectedBreedName,
+                            onTapAvatar: {
+                                guard isEditing else { return }
+                                pickedUIImage = nil
+                                showImagePicker = true
+                            },
+                            onSave: { toSave in
+                                Task { await handleSave(toSave) }
+                            },
+                            onCancel: { handleCancel() },
+                            onDelete: { showDeleteConfirm = true }
+                        )
                         .padding(.horizontal)
-
-                        // Weight
-                        VStack(spacing: 0) {
-                            HStack {
-                                Text("Weight:")
-                                Text("\(weight) kg").bold()
-                            }
-                            Text("Scroll To Change Weight")
-                                .font(.caption.monospaced())
-                                .foregroundColor(.secondary)
-
-                            Picker("", selection: $weight) {
-                                ForEach(1...200, id: \.self) { Text("\($0) kg").tag($0) }
-                            }
-                            .pickerStyle(.wheel)
-                            .frame(height: 60)
-                            .clipped()
-                            .onChange(of: weight) { _ in userViewModel.setDogWeight(kg: Int32(weight)) }
-                        }
-                        .padding(.horizontal)
-
-                        // Apply
-                        Button("Apply Changes") {
-                            userViewModel.setOwnerName(v: ownerName)
-                            userViewModel.setDogName(v: dogName)
-                            userViewModel.setDogGender(gender: isMale ? .male : .female)
-                            userViewModel.setIsNeutered(v: isNeutered)
-                            userViewModel.setIsFriendly(v: isFriendly)
-                            userViewModel.setDogWeight(kg: Int32(weight))
-                        }
-                        .font(.headline.monospaced())
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                        .background(Color.blue)
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-
-                        stateBanner
-                        Spacer().frame(height: 20)
                     }
                 }
-            }
-            // Photo picker
-            .sheet(isPresented: $showingPhotoPicker, onDismiss: applyPickedImage) {
-                PhotoPicker(image: $pickedUIImage)
-            }
-            // Hide default nav bar (optional)
-            .navigationBarBackButtonHidden(true)
-            .toolbar(.hidden, for: .navigationBar)
-
-            .task {
-                do {
-                    let dto = try await userViewModel.getUserOrThrow()
-                    applyUser(dto)
-                } catch {
-                    errorMessage = error.localizedDescription
-                }
-            }
-
-
-
-            // (Optional) observe KMM state flow if you still emit Initial/Loaded/Error
-            .onAppear {
-                vmState = userViewModel.userState.value
-
-                observeTask?.cancel()
-                observeTask = Task {
-                    for await s in userViewModel.userState {
-                        vmState = s
-                        if let i = s as? UserState.Initial { applyForm(i.data) }
-                        if let e = s as? UserState.Error { errorMessage = e.message }
-                    }
-                }
-
-                if let i = vmState as? UserState.Initial { applyForm(i.data) }
-            }
-            .onDisappear { observeTask?.cancel(); observeTask = nil }
-            .alert("Error", isPresented: Binding(
-                get: { !errorMessage.isEmpty },
-                set: { _ in }
-            )) {
-                Button("OK") { errorMessage = "" }
-            } message: { Text(errorMessage) }
-        }
-
-        // MARK: - Helpers
-
-        /// Map a `UserDto` (Firestore document) into local SwiftUI state
-        private func applyUser(_ u: UserDto) {
-            email     = u.email
-            ownerName = u.name
-            
-            if let dogs = u.dogList as? [DogDto], let first = dogs.first {
-                dogName    = first.name
-                isMale     = first.isMale
-                isNeutered = first.isNeutered
-                isFriendly = first.isFriendly
-                weight     = Int(first.weight)
+                .padding(.vertical, 16)
             }
         }
-
-        /// Map your existing Initial/UserFormData to local UI (keeps old flow working)
-        private func applyForm(_ f: UserFormData) {
-            email      = f.email
-            ownerName  = f.ownerName
-            dogName    = f.dogName
-            isMale     = (f.dogGender == .male)
-            isNeutered = f.isNeutered
-            isFriendly = f.isFriendly
-            weight     = Int(f.dogWeight)
-            username   = f.ownerName.isEmpty ? f.email : f.ownerName
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await initialLoad() }
+        .sheet(isPresented: $showImagePicker, onDismiss: {
+            guard var w = workingDog, let img = pickedUIImage else { return }
+            w.localImage = img
+            workingDog = w
+        }) {
+            PhotoPicker(image: $pickedUIImage)
         }
-
-        @ViewBuilder
-        private func labeledField(_ label: String, text: Binding<String>) -> some View {
-            HStack {
-                Text(label).frame(width: 110, alignment: .leading)
-                TextField("", text: text)
-                    .textFieldStyle(.roundedBorder)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled(true)
+        .confirmationDialog("Delete this dog?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                Task { await confirmDelete() }
             }
+            Button("Cancel", role: .cancel) {}
         }
-
-        private func applyPickedImage() {
-            if let ui = pickedUIImage {
-                dogImage = Image(uiImage: ui)
-                if let data = ui.jpegData(compressionQuality: 0.9) {
-                    let url = FileManager.default.temporaryDirectory
-                        .appendingPathComponent("dog-\(UUID().uuidString).jpg")
-                    try? data.write(to: url)
-                    userViewModel.setDogPictureUrl(url: url.absoluteString)
-                }
-            }
-        }
-
-        // Small status banner
-        @ViewBuilder
-        private var stateBanner: some View {
-            if let state = vmState {
-                switch state {
-                case is UserState.Loading:
-                    ProgressView("Please wait...").padding(.horizontal)
-                case let e as UserState.Error:
-                    Text(e.message).foregroundColor(.red).padding(.horizontal)
-                case is UserState.Loaded:
-                    Text("Saved!").foregroundColor(.green).padding(.horizontal)
-                default:
-                    EmptyView()
-                }
-            } else {
-                EmptyView()
+        .alert("Error", isPresented: Binding(get: { !errorMessage.isEmpty }, set: { _ in })) {
+            Button("OK") { errorMessage = "" }
+        } message: { Text(errorMessage) }
+        .onChange(of: isEditing) { newValue in
+            if newValue, let w = workingDog {
+                originalDogBeforeEdit = w
             }
         }
     }
+
+    // MARK: - load & mapping
+
+    private func initialLoad() async {
+        if selectedBreedName.isEmpty { selectedBreedName = breeds.first?.name ?? "" }
+        do {
+            let user = try await dogsViewModel.getUserOrThrow()
+            applyUser(user)
+            if selectedDogId == nil { selectFirstDog() }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func selectFirstDog() {
+        guard let first = dogs.first else { return }
+        selectedDogId = first.id
+        workingDog = first
+        selectedBreedName = first.breed?.name ?? (breeds.first?.name ?? "")
+    }
+
+    private func applyUser(_ u: UserDto) {
+        email = u.email
+        ownerName = u.name
+        if let list = u.dogList as? [DogDto] {
+            dogs = list.enumerated().map { (i, d) in toCardModel(d, uiFallback: "remote-\(i)-\(d.name)") }
+        } else {
+            dogs = []
+        }
+        if let sel = selectedDogId, let keep = dogs.first(where: { $0.id == sel }), !isEditing {
+            workingDog = keep
+        }
+    }
+
+    private func toCardModel(_ d: DogDto, uiFallback: String) -> DogCardModel {
+        let backendId = d.id ?? ""
+        let uiId = backendId.isEmpty ? uiFallback : backendId
+        return DogCardModel(
+            id: uiId,
+            backendId: backendId,
+            name: d.name,
+            breed: d.breed,
+            weight: Int(d.weight),
+            isMale: d.isMale,
+            isNeutered: d.isNeutered,
+            isFriendly: d.isFriendly,
+            localImage: nil
+        )
+    }
+
+    private func placeholderDog() -> DogCardModel {
+        DogCardModel(
+            id: "placeholder",
+            backendId: "",
+            name: "",
+            breed: breeds.first,
+            weight: 10,
+            isMale: true,
+            isNeutered: false,
+            isFriendly: true,
+            localImage: nil
+        )
+    }
+
+    // MARK: - Add/Select
+
+    private func handleSelectDog(_ dog: DogCardModel) {
+        if selectedDogId == dog.id {
+            selectedDogId = nil
+            workingDog = nil
+            isEditing = false
+        } else {
+            selectedDogId = dog.id
+            workingDog = dog
+            selectedBreedName = dog.breed?.name ?? (breeds.first?.name ?? "")
+            isEditing = false
+        }
+    }
+
+    private func handleAddDog() {
+        guard !addingTempDog, !busy else { return }
+        var dog = DogCardModel(
+            id: "temp-\(UUID().uuidString)",
+            backendId: "",
+            name: "New Dog",
+            breed: breeds.first,
+            weight: 10,
+            isMale: true,
+            isNeutered: false,
+            isFriendly: true,
+            localImage: nil
+        )
+        while dogs.contains(where: { $0.id == dog.id }) {
+            dog.id = "temp-\(UUID().uuidString)"
+        }
+        dogs.append(dog)
+        selectedDogId = dog.id
+        workingDog = dog
+        selectedBreedName = dog.breed?.name ?? (breeds.first?.name ?? "")
+        isEditing = true
+    }
+
+    // MARK: - Save/Cancel/Delete
+
+    private func toDtoAdd(_ c: DogCardModel) -> DogDto {
+        DogDto(
+            id: "",
+            name: c.name,
+            breed: c.breed ?? breeds.first!,
+            weight: Int32(c.weight),
+            imgUrl: "",
+            isFriendly: c.isFriendly,
+            isMale: c.isMale,
+            isNeutered: c.isNeutered,
+            ownerId: ""
+        )
+    }
+
+    private func toDtoUpdate(_ c: DogCardModel) -> DogDto {
+        DogDto(
+            id: c.backendId,
+            name: c.name,
+            breed: c.breed ?? breeds.first!,
+            weight: Int32(c.weight),
+            imgUrl: "",
+            isFriendly: c.isFriendly,
+            isMale: c.isMale,
+            isNeutered: c.isNeutered,
+            ownerId: ""
+        )
+    }
+
+    private func handleCancel() {
+        guard let sel = selectedDogId else { return }
+        if let original = originalDogBeforeEdit {
+            workingDog = original
+            if let idx = dogs.firstIndex(where: { $0.id == sel }) {
+                dogs[idx] = original
+            }
+        }
+        isEditing = false
+    }
+
+    private func handleSave(_ toSave: DogCardModel) async {
+        busy = true
+        defer { busy = false }
+        do {
+            if toSave.backendId.isEmpty {
+                // ADD
+                let saved = try await dogsViewModel.addDogAndLinkToUserOrThrow(dog: toDtoAdd(toSave))
+
+                // patch temp chip to real
+                let newId = saved.id
+                if !newId.isEmpty, let idx = dogs.firstIndex(where: { $0.id == toSave.id }) {
+                    var patched = toSave
+                    patched.backendId = newId
+                    patched.id = newId
+                    dogs[idx] = patched
+                    selectedDogId = patched.id
+                    workingDog = patched
+                }
+
+                let user = try await dogsViewModel.getUserOrThrow()
+                applyUser(user)
+
+                if !saved.id.isEmpty, let found = dogs.first(where: { $0.backendId == saved.id }) {
+                    selectedDogId = found.id
+                    workingDog = found
+                    selectedBreedName = found.breed?.name ?? (breeds.first?.name ?? "")
+                } else {
+                    selectFirstDog()
+                }
+                isEditing = false
+            } else {
+                // UPDATE
+                try await dogsViewModel.updateDogAndUserOrThrow(dog: toDtoUpdate(toSave))
+
+                // optimistic local patch
+                if let idx = dogs.firstIndex(where: { $0.id == toSave.id }) {
+                    dogs[idx] = toSave
+                }
+
+                let user = try await dogsViewModel.getUserOrThrow()
+                applyUser(user)
+                if let refreshed = dogs.first(where: { $0.backendId == toSave.backendId }) {
+                    selectedDogId = refreshed.id
+                    workingDog = refreshed
+                    selectedBreedName = refreshed.breed?.name ?? (breeds.first?.name ?? "")
+                }
+                isEditing = false
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func confirmDelete() async {
+        platformLogger(tag: "PUP", message: "DEL1 selectedDogId=\(selectedDogId ?? "nil")")
+
+        guard let sel = selectedDogId,
+              let d = dogs.first(where: { $0.id == sel }) else {
+            platformLogger(tag: "PUP", message: "DEL2 no dog for selected id")
+            return
+        }
+
+        platformLogger(tag: "PUP", message: "DEL3 candidate uiId=\(d.id) backendId=\(d.backendId) isTemp=\(d.isTemp)")
+        busy = true
+        defer { busy = false }
+
+        if d.isTemp {
+            platformLogger(tag: "PUP", message: "DEL4 temp → local remove only")
+            dogs.removeAll { $0.id == sel }
+            selectedDogId = nil
+            workingDog = nil
+            isEditing = false
+            return
+        }
+
+        do {
+            let idOrName = d.backendId.isEmpty ? d.name : d.backendId
+            platformLogger(tag: "PUP", message: "DEL5 calling VM delete idOrName=\(idOrName)")
+            try await dogsViewModel.deleteDogAndUserOrThrow(dogId: idOrName)
+            platformLogger(tag: "PUP", message: "DEL6 VM delete finished OK")
+
+            let user = try await dogsViewModel.getUserOrThrow()
+            applyUser(user)
+
+            selectedDogId = nil
+            workingDog = nil
+            isEditing = false
+            platformLogger(tag: "PUP", message: "DEL7 UI refreshed (dogs.count=\(dogs.count))")
+        } catch {
+            platformLogger(tag: "PUP", message: "DELX error \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Owner header
+
+    private struct OwnerHeader: View {
+        let ownerName: String
+        let email: String
+        var body: some View {
+            let displayOwnerName = ownerName.isEmpty ? "—" : ownerName
+            let displayEmail = email.isEmpty ? "—" : email
+            VStack(alignment: .leading, spacing: 4) {
+                Text(displayOwnerName).font(.title.bold())
+                Text(displayEmail).font(.subheadline).foregroundColor(.secondary)
+            }
+        }
+    }
+
+    // MARK: - 5-per-row grid
+
+    private struct DogGrid: View {
+        let dogs: [DogCardModel]
+        let selectedDogId: String?
+        let busy: Bool
+        let onSelect: (DogCardModel) -> Void
+        let onAdd: () -> Void
+
+        // exactly 5 columns, nicely spaced
+        private let columns = Array(
+            repeating: GridItem(.flexible(minimum: 40), spacing: 12, alignment: .center),
+            count: 5
+        )
+
+        var body: some View {
+            LazyVGrid(columns: columns, alignment: .center, spacing: 14) {
+                ForEach(dogs, id: \.id) { dog in
+                    DogGridTile(
+                        dog: dog,
+                        isSelected: selectedDogId == dog.id,
+                        disabled: busy
+                    ) { onSelect(dog) }
+                }
+                // Always show the + tile (won't disappear after 5 items)
+                AddGridTile(disabled: busy, action: onAdd)
+            }
+            .padding(.bottom, 8) // avoid bottom clipping
+        }
+    }
+
+    private struct DogGridTile: View {
+        let dog: DogCardModel
+        let isSelected: Bool
+        let disabled: Bool
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: action) {
+                DogAvatar(dog: dog)
+                    .frame(width: 54, height: 54) // smaller circles
+                    .overlay(Circle().stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2))
+                    .contentShape(Circle()) // full hit area
+            }
+            .buttonStyle(.plain)
+            .disabled(disabled)
+        }
+    }
+
+    private struct AddGridTile: View {
+        let disabled: Bool
+        let action: () -> Void
+        var body: some View {
+            Button(action: action) {
+                ZStack {
+                    Circle().stroke(disabled ? Color.gray : Color.blue, lineWidth: 2)
+                    Image(systemName: "plus")
+                        .font(.title3.bold()) // slightly smaller icon
+                        .foregroundColor(disabled ? .gray : .blue)
+                }
+                .frame(width: 54, height: 54)     // matches dog circles
+                .contentShape(Circle())           // full hit area
+            }
+            .buttonStyle(.plain)
+            .disabled(disabled)
+        }
+    }
+
+    // MARK: - Details card
+
+    private struct DogDetailsCard: View {
+        @Binding var working: DogCardModel
+        @Binding var isEditing: Bool
+        @Binding var selectedBreedName: String
+
+        var onTapAvatar: () -> Void
+        var onSave: (DogCardModel) -> Void
+        var onCancel: () -> Void
+        var onDelete: () -> Void
+
+        let breeds = allBreeds()
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    Button { if isEditing { onTapAvatar() } } label: {
+                        DogAvatar(dog: working)
+                            .frame(width: 64, height: 64)
+                            .overlay(isEditing ? Circle().stroke(Color.blue, lineWidth: 2) : nil)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isEditing)
+
+                    if isEditing {
+                        TextField("Dog Name", text: $working.name)
+                            .font(.title3.bold())
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        Text(working.name).font(.title3.bold())
+                    }
+                    Spacer()
+                }
+
+                if isEditing {
+                    Picker("Breed", selection: $selectedBreedName) {
+                        ForEach(breeds, id: \.name) { b in
+                            Text(breedTitle(b)).tag(b.name)
+                        }
+                    }
+                    .onChange(of: selectedBreedName) { new in
+                        working.breed = breedByName(new, from: breeds)
+                    }
+                } else {
+                    HStack {
+                        Text("Breed").bold(); Spacer()
+                        Text(working.breed.map(breedTitle) ?? "—").foregroundColor(.secondary)
+                    }
+                }
+
+                if isEditing {
+                    Stepper(value: $working.weight, in: 1...200) {
+                        HStack { Text("Weight").bold(); Spacer(); Text("\(working.weight) kg").font(.headline) }
+                    }
+                } else {
+                    HStack(spacing: 12) {
+                        Text("Weight").bold()
+                        Text(" \(working.weight) kg").font(.headline)
+                        Spacer()
+                    }
+                }
+
+                BinaryRow(title: "Gender",   left: "Male", right: "Female", value: $working.isMale,     enabled: isEditing)
+                BinaryRow(title: "Neutered", left: "Yes",  right: "No",     value: $working.isNeutered, enabled: isEditing)
+                BinaryRow(title: "Friendly", left: "Yes",  right: "No",     value: $working.isFriendly, enabled: isEditing)
+
+                HStack(spacing: 12) {
+                    Button(isEditing ? "Save" : "Edit") {
+                        if isEditing {
+                            if working.breed == nil,
+                               let b = breedByName(selectedBreedName, from: breeds) ?? breeds.first {
+                                working.breed = b
+                            }
+                            onSave(working)
+                            isEditing = false
+                        } else {
+                            isEditing = true
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(isEditing ? .green : .blue)
+                    .disabled(working.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    if isEditing {
+                        Button("Cancel") { onCancel() }
+                            .buttonStyle(.bordered)
+
+                        Button("Delete", role: .destructive) { onDelete() }
+                            .buttonStyle(.bordered)
+                    }
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(.systemBackground).opacity(0.92))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.35), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.12), radius: 14, x: 0, y: 6)
+        }
+    }
+
+        private struct BinaryRow: View {
+            let title: String
+            let left: String
+            let right: String
+            @Binding var value: Bool
+            let enabled: Bool
+            var body: some View {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title).bold()
+                    HStack(spacing: 8) {
+                        Seg(text: left,  selected: value,  enabled: enabled) { if enabled { value = true } }
+                        Seg(text: right, selected: !value, enabled: enabled) { if enabled { value = false } }
+                    }
+                }
+            }
+            private struct Seg: View {
+                let text: String
+                let selected: Bool
+                let enabled: Bool
+                let action: () -> Void
+                var body: some View {
+                    Button(action: action) {
+                        Text(text).font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity).padding(.vertical, 8)
+                            .background(selected ? Color.white : Color.gray.opacity(0.2))
+                            .foregroundColor(.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .opacity(enabled ? 1 : 0.5)
+                    .disabled(!enabled)
+                }
+            }
+        }
+    }
+
+    // MARK: - Avatar
+
+    private struct DogAvatar: View {
+        let dog: DogCardModel
+        var body: some View {
+            ZStack {
+                Circle().fill(Color(.secondarySystemBackground))
+                if let img = dog.localImage {
+                    Image(uiImage: img).resizable().scaledToFill()
+                } else {
+                    Image(systemName: "pawprint.fill").font(.largeTitle)
+                }
+            }
+            .clipShape(Circle())
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+            .shadow(radius: 2)
+        }
+    }
+

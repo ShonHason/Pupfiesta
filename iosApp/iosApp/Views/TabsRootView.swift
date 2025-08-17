@@ -9,15 +9,15 @@ import SwiftUI
 import Shared
 
 struct TabsRootView: View {
-    let userVM: UserViewModel
+    let dogsVM: DogsViewModel
     let gardensVM: DogGardensViewModel
 
     @State private var selected = 0
 
-    init(userVM: UserViewModel, gardensVM: DogGardensViewModel) {
-        self.userVM = userVM
+    init(dogsVM: DogsViewModel, gardensVM: DogGardensViewModel) {
+        self.dogsVM = dogsVM
         self.gardensVM = gardensVM
-
+            
         // Make the tab bar subtle / transparent
         let appearance = UITabBarAppearance()
         appearance.configureWithTransparentBackground()
@@ -37,7 +37,7 @@ struct TabsRootView: View {
                 }
                 .tag(0)
 
-            EditProfileView(userViewModel: userVM)
+            EditProfileView(dogsViewModel: dogsVM)
                 .tabItem {
                     Image(systemName: "person.fill")
                     Text("Profile")
