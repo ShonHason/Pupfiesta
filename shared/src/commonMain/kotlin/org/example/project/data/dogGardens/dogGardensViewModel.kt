@@ -15,6 +15,12 @@ import org.example.project.platformLogger
 import org.example.project.utils.Location
 import org.example.project.utils.getLocation
 
+import kotlin.math.pow
+
+import org.example.project.domain.models.Location as ModelLocation
+import kotlinx.coroutines.Job
+import org.example.project.data.remote.dto.DogDto
+
 /**
  * Prefer REAL device location. If unavailable/denied/slow, fall back to TEL_AVIV,
  * but keep auto-centering to REAL location once it becomes available.
@@ -26,9 +32,19 @@ class DogGardensViewModel(
 ) : BaseViewModel() {
 
     private val TEL_AVIV = Location(32.0853, 34.7818)
+    private var searchJob: Job? = null
+    private val nameCache = mutableMapOf<String, String>()
 
     private val _userLocation = MutableStateFlow<Location?>(null)
     val userLocation: StateFlow<Location?> = _userLocation.asStateFlow()
+
+    private var presenceJob: Job? = null
+    private val _presentDogs = MutableStateFlow<List<DogDto>>(emptyList())
+    val presentDogs: StateFlow<List<DogDto>> = _presentDogs.asStateFlow()
+
+    private val _gardenPhotoUrl = MutableStateFlow<String?>(null)
+    val gardenPhotoUrl: StateFlow<String?> = _gardenPhotoUrl.asStateFlow()
+
 
     // Start with TA so UI isn't empty; update to real GPS as soon as we get a fix
     private val _searchCenter = MutableStateFlow(TEL_AVIV)
@@ -84,6 +100,36 @@ class DogGardensViewModel(
         }
     }
 
+    fun startWatchingPresence(gardenId: String) {
+        presenceJob?.cancel()
+        presenceJob = scope.launch {
+            firebaseRepo.listenGardenPresence(gardenId).collect { list ->
+                _presentDogs.value = list
+            }
+        }
+    }
+
+    fun stopWatchingPresence() {
+        presenceJob?.cancel()
+        presenceJob = null
+        _presentDogs.value = emptyList()
+    }
+
+    fun loadGardenPhoto(placeId: String, maxWidth: Int = 800) {
+        scope.launch {
+            _gardenPhotoUrl.value = runCatching {
+                gardensRepo.getPlacePhotoUrl(placeId, maxWidth)
+            }.getOrNull()
+        }
+    }
+
+    suspend fun checkInDogs(gardenId: String, dogs: List<DogDto>) {
+        firebaseRepo.checkInDogs(gardenId, dogs)
+    }
+
+    suspend fun checkOutDogs(gardenId: String, dogIds: List<String>) {
+        firebaseRepo.checkOutDogs(gardenId, dogIds)
+    }
 
     fun onScanClick() {
         scope.launch {
@@ -140,7 +186,9 @@ class DogGardensViewModel(
     }
 
     fun getGoogleGardens() {
-        scope.launch {
+        // cancel previous to avoid races/flicker
+        searchJob?.cancel()
+        searchJob = scope.launch {
             val center = _searchCenter.value
             val radius = _radiusMeters.value
             try {
@@ -150,20 +198,61 @@ class DogGardensViewModel(
                     radiusMeters = radius,
                     language = defaultLanguage
                 )
-                _gardens.value = parks
+
+                // strict geo filter
+                val filteredByDistance = parks.filter {
+                    distanceMeters(center, it.location) <= radius
+                }
+
+                // stabilize name (avoid toggling back to "Dog Park")
+                val stabilized = filteredByDistance.map { p ->
+                    val current = p.name
+                    val cached = nameCache[p.id]
+
+                    val finalName =
+                        when {
+                            !current.isNullOrBlank() && !current.equals("Dog Park", ignoreCase = true) -> current
+                            cached != null -> cached
+                            else -> current ?: "Dog Park"
+                        }
+
+                    nameCache[p.id] = finalName
+                    p.copy(name = finalName)
+                }
+
+                _gardens.value = stabilized
             } catch (_: Throwable) {
                 _gardens.value = emptyList()
             }
         }
     }
 
+    // ---------- distance helpers ----------
+    // Overload to bridge utils.Location (center) and domain.models.Location (park)
+    private fun distanceMeters(a: Location, b: ModelLocation): Int =
+        distanceMeters(a.latitude, a.longitude, b.latitude, b.longitude)
+
+    private fun distanceMeters(
+        lat1: Double, lon1: Double,
+        lat2: Double, lon2: Double
+    ): Int {
+        val R = 6_371_000.0
+        fun Double.deg2rad() = this * kotlin.math.PI / 180.0
+        val dLat = (lat2 - lat1).deg2rad()
+        val dLon = (lon2 - lon1).deg2rad()
+        val a = kotlin.math.sin(dLat / 2).pow(2.0) +
+                kotlin.math.cos(lat1.deg2rad()) * kotlin.math.cos(lat2.deg2rad()) *
+                kotlin.math.sin(dLon / 2).pow(2.0)
+        val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+        return (R * c).toInt()
+    }
+
     fun getGardens() {
         val pivot = _userLocation.value ?: _searchCenter.value
         val radius = _radiusMeters.value
 
-
         scope.launch {
-            when (val result = firebaseRepo.getDogGardensNear(pivot.latitude,pivot.longitude, radius)) {
+            when (val result = firebaseRepo.getDogGardensNear(pivot.latitude, pivot.longitude, radius)) {
                 is Result.Success -> _gardens.value = result.data ?: emptyList()
                 is Result.Failure -> _gardens.value = emptyList()
             }

@@ -1,5 +1,6 @@
 package org.example.project.data.firebase
 
+import kotlinx.coroutines.flow.Flow
 import org.example.project.data.remote.dto.DogDto
 import org.example.project.data.remote.dto.UserDto
 import org.example.project.domain.models.AuthError
@@ -25,4 +26,7 @@ interface FirebaseRepository {
     suspend fun saveDogGardens(gardens: List<DogGarden>): Result<Unit, AuthError>
     suspend fun getDogGardens(): Result<List<DogGarden>, AuthError>
     suspend fun getDogGardensNear(latitude: Double, longitude: Double, radiusMeters: Int): Result<List<DogGarden>, AuthError>
+    fun listenGardenPresence(gardenId: String): Flow<List<DogDto>>
+    suspend fun checkInDogs(gardenId: String, dogs: List<DogDto>): Result<Unit, AuthError>
+    suspend fun checkOutDogs(gardenId: String, dogIds: List<String>): Result<Unit, AuthError>
 }

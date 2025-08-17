@@ -9,5 +9,3 @@ data class User(
     val ownerName: String,
     val dogList: List<Dog>
 )
-
-

@@ -61,6 +61,8 @@ kotlin {
                 implementation("dev.gitlive:firebase-auth:$gitlive")
                 implementation("dev.gitlive:firebase-firestore:$gitlive")
                 implementation("io.insert-koin:koin-core:3.5.6")
+                implementation("io.coil-kt.coil3:coil-compose:3.3.0")
+                implementation("io.coil-kt.coil3:coil-network-ktor2:3.3.0")
 
 
                 // Serialization

@@ -4,7 +4,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class UserDto(
-    val email: String,
-    val name: String,
-    val dogList: List<DogDto>
+    val id: String = "",
+    val email: String = "",
+    val ownerName: String = "",
+    val dogList: List<DogDto> = emptyList()
 )

@@ -76,7 +76,7 @@ class DogsViewModel(
                 name = d.name,
                 breed = d.breed,
                 weight = d.weight,
-                imgUrl = d.imgUrl.takeIf { it.isNotBlank() },
+                imgUrl = d.photoUrl.takeIf { it.isNotBlank() },
                 isFriendly = d.isFriendly,
                 isMale = d.isMale,
                 isNeutered = d.isNeutered,
@@ -105,7 +105,7 @@ class DogsViewModel(
             name       = data.name,
             breed      = data.breed!!,               // validated non-null above
             weight     = data.weight,
-            imgUrl     = data.imgUrl.orEmpty(),
+            dogPictureUrl     = data.imgUrl.orEmpty(),
             isFriendly = data.isFriendly,
             isMale     = data.isMale,
             isNeutered = data.isNeutered,

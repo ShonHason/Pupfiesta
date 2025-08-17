@@ -20,9 +20,11 @@ import org.example.project.di.initKoin
 import org.example.project.di.startKoinIfNeeded
 
 import org.example.project.features.registration.UserViewModel
+import org.example.project.presentation.screens.addDog.AddDogScreen
 import org.example.project.presentation.screens.home.GardenScreen
 import org.example.project.presentation.screens.landing.LandingScreen
 import org.example.project.presentation.screens.login.LoginScreen
+import org.example.project.presentation.screens.profile.ProfileScreen
 import org.example.project.presentation.screens.registration.RegistrationScreen
 import org.example.project.utils.appContext
 import org.example.project.utils.httpClient
@@ -102,6 +104,36 @@ class MainActivity : ComponentActivity() {
                         viewModel = gardenVm,
                         onBack    = { navController.popBackStack() },
                         onScan    = {  gardenVm.onScanClick()},
+                        onGoProfile = {
+                            navController.navigate("profile") {
+                                launchSingleTop = true
+                            }
+                        },
+                        userViewModel = userVm
+                    )
+                }
+                composable("addDog") {
+                    AddDogScreen(
+                        viewModel = userVm,
+                        onBack = { navController.popBackStack() },
+                        onDone = {
+                            navController.popBackStack()
+                        }
+                    )
+                }
+
+                composable("profile") {
+                    ProfileScreen(
+                        viewModel = userVm,
+                        onBack = { navController.popBackStack() },
+                        onGoYard = {
+
+                            navController.navigate("home") {
+                                launchSingleTop = true
+                                popUpTo("home") { inclusive = false }
+                            }
+                        },
+                        onAddDog =  { navController.navigate("addDog") }
                     )
                 }
             }
