@@ -23,3 +23,4 @@ GoogleService-Info.plist
 **/GoogleService-Info.plist
 **/Info.plistInfo.plist
 Info.plist
+iosApp/Config/Secrets.xcconfig

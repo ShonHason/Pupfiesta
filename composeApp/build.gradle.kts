@@ -65,6 +65,8 @@ kotlin {
                 implementation("io.ktor:ktor-client-okhttp:$ktor")
                 implementation("io.ktor:ktor-client-content-negotiation:$ktor")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor")
+
+
             }
         }
 
@@ -119,4 +121,6 @@ android {
 dependencies {
     implementation(libs.cloudinary.android)
     debugImplementation(compose.uiTooling)
+    implementation("io.coil-kt.coil3:coil-compose:3.3.0")
+    implementation("io.coil-kt.coil3:coil-network-ktor2:3.3.0")
 }

@@ -55,8 +55,7 @@ kotlin {
                 implementation("dev.gitlive:firebase-auth:$gitlive")
                 implementation("dev.gitlive:firebase-firestore:$gitlive")
                 implementation("io.insert-koin:koin-core:3.5.6")
-                implementation("io.coil-kt.coil3:coil-compose:3.3.0")
-                implementation("io.coil-kt.coil3:coil-network-ktor2:3.3.0")
+
 
 
                 implementation("io.insert-koin:koin-core:3.5.6")
@@ -80,13 +79,10 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.android)
                 implementation("io.insert-koin:koin-android:3.5.6") // for androidContext()
                 implementation(libs.cloudinary.android)
-
                 // Ktor Android engine
                 implementation("io.ktor:ktor-client-okhttp:$ktor")
-
                 // Android-only deps used in shared Android code
                 implementation(libs.play.services.location)
-
                 // REQUIRED for viewModelScope in androidMain actuals
                 implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
                 implementation("com.google.android.gms:play-services-location:21.3.0")
