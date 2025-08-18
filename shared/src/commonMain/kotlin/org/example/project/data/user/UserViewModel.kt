@@ -5,6 +5,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.example.project.data.firebase.FirebaseRepository
 import org.example.project.data.firebase.RemoteFirebaseRepository
@@ -32,7 +33,14 @@ class UserViewModel(
         MutableStateFlow<UserState>(UserState.Initial(UserFormData()))
     val userState: StateFlow<UserState> = _userState
 
+    private val _currentUser = MutableStateFlow<UserDto?>(null)
+    val currentUser: StateFlow<UserDto?> = _currentUser.asStateFlow()
 
+    private val _selectedDogIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedDogIds: StateFlow<Set<String>> = _selectedDogIds.asStateFlow()
+
+    private val _shouldShowDogPicker = MutableStateFlow(false)
+    val shouldShowDogPicker: StateFlow<Boolean> = _shouldShowDogPicker.asStateFlow()
 
     fun setEmail(v: String) =
         onEvent(UserEvent.EmailChanged(v))
@@ -92,6 +100,34 @@ class UserViewModel(
         }
     }
 
+    suspend fun loadUserIfNeeded(): Result<UserDto, AuthError> {
+        _currentUser.value?.let { return Result.Success(it) }
+        val r = firebaseRepo.getUserProfile()
+        when (r) {
+            is Result.Success -> {
+                _currentUser.value = r.data
+                _userState.value = UserState.Loaded
+            }
+            is Result.Failure -> {
+                _userState.value = UserState.Error(r.error?.message ?: "Login failed")
+            }
+        }
+        return r
+    }
+    suspend fun refreshUser(): Result<UserDto, AuthError> {
+        val r = firebaseRepo.getUserProfile()
+        when (r) {
+            is Result.Success -> {
+                _currentUser.value = r.data
+                _userState.value = UserState.Loaded
+            }
+            is Result.Failure -> {
+                _userState.value = UserState.Error(r.error?.message ?: "Load failed")
+            }
+        }
+        return r
+    }
+    fun invalidateUserCache() { _currentUser.value = null }
 
 
     @Throws(Exception::class)
@@ -137,6 +173,9 @@ class UserViewModel(
                     // keep the loader on-screen for at least 2 seconds
                     delay(3000)
                     _userState.value = UserState.Loaded
+                    showDogPicker()
+                    scope.launch { loadUserIfNeeded() }
+
                 }
                 is Result.Failure -> {
                     // no delay on failure, show error right away
@@ -182,7 +221,7 @@ class UserViewModel(
             name       = data.dogName,
             breed      = data.dogBreed,
             weight     = data.dogWeight,
-            imgUrl     = data.dogPictureUrl.orEmpty(),
+            dogPictureUrl     = data.dogPictureUrl.orEmpty(),
             isFriendly = data.isFriendly,
             isMale     = (data.dogGender == Gender.MALE),
             isNeutered = data.isNeutered,
@@ -225,11 +264,58 @@ class UserViewModel(
         }
     }
 
-
+    suspend fun addDog(
+        name: String,
+        breed: org.example.project.enum.Breed,
+        weight: Int,
+        isFriendly: Boolean,
+        isMale: Boolean,
+        isNeutered: Boolean,
+        pictureUrl: String
+    ): Result<DogDto, dogError> {
+        val dto = DogDto(
+            id = "",
+            name = name.trim(),
+            breed = breed,
+            weight = weight,
+            dogPictureUrl = pictureUrl.trim(),
+            isFriendly = isFriendly,
+            isMale = isMale,
+            isNeutered = isNeutered,
+            ownerId = "" // repo fills uid
+        )
+        return firebaseRepo.addDogAndLinkToUser(dto)
+    }
 
     private fun validateEmail(email: String): Boolean {
         val regex = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
         return regex.matches(email.trim())
+    }
+    fun showDogPicker() {
+        _shouldShowDogPicker.value = true
+    }
+    fun dismissDogPicker() {
+        _shouldShowDogPicker.value = false
+    }
+    fun setSelectedDogIds(ids: Set<String>) {
+        _selectedDogIds.value = ids
+    }
+    fun addSelectedDog(id: String) {
+        _selectedDogIds.value = _selectedDogIds.value + id
+    }
+
+    fun removeSelectedDog(id: String) {
+        _selectedDogIds.value = _selectedDogIds.value - id
+    }
+
+    fun toggleSelectedDog(id: String) {
+        _selectedDogIds.value = _selectedDogIds.value.let { sel ->
+            if (id in sel) sel - id else sel + id
+        }
+    }
+
+    fun clearSelectedDogs() {
+        _selectedDogIds.value = emptySet()
     }
 
     private fun validatePassword(password: String): Boolean =

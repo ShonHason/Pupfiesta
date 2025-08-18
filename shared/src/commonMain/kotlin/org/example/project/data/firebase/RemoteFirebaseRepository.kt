@@ -4,6 +4,11 @@ package org.example.project.data.firebase
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.firestore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import org.example.project.data.local.Result
 import org.example.project.data.remote.dto.DogDto
 import org.example.project.data.remote.dto.UserDto
@@ -13,20 +18,17 @@ import org.example.project.domain.models.User
 import org.example.project.domain.models.dogError
 import org.example.project.platformLogger
 import org.example.project.utils.extension.toDto
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
+
 private const val COLL_USERS = "Users"
 private const val COLL_DOGS = "Dogs"
 private const val COLL_DOG_GARDENS = "DogGardens"
+private const val SUBCOLL_PRESENCE = "Presence"
 
 class RemoteFirebaseRepository : FirebaseRepository {
 
@@ -53,6 +55,40 @@ class RemoteFirebaseRepository : FirebaseRepository {
         }
     }
 
+    // Realtime presence fallback: polling Flow (works in KMP commonMain)
+    override fun listenGardenPresence(gardenId: String): Flow<List<DogDto>> = flow {
+        val presenceCol = gardensCol.document(gardenId).collection(SUBCOLL_PRESENCE)
+        while (currentCoroutineContext().isActive) {
+            val qs = presenceCol.get()
+            val list = qs.documents.mapNotNull { doc -> doc.data<DogDto>() }
+            emit(list)
+            delay(2500) // tweak polling interval if you like
+        }
+    }
+
+    override suspend fun checkInDogs(gardenId: String, dogs: List<DogDto>): Result<Unit, AuthError> =
+        try {
+            val uid = currentUid()
+            val presenceCol = gardensCol.document(gardenId).collection(SUBCOLL_PRESENCE)
+            dogs.forEach { d ->
+                val docId = d.id.ifBlank { return@forEach }   // need dogId
+                val payload = d.copy(ownerId = uid)            // lightweight doc for UI
+                presenceCol.document(docId).set(payload, merge = true)
+            }
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Failure(AuthError(e.message ?: "Check-in failed"))
+        }
+
+    override suspend fun checkOutDogs(gardenId: String, dogIds: List<String>): Result<Unit, AuthError> =
+        try {
+            val presenceCol = gardensCol.document(gardenId).collection(SUBCOLL_PRESENCE)
+            dogIds.forEach { id -> presenceCol.document(id).delete() }
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Failure(AuthError(e.message ?: "Check-out failed"))
+        }
+
     override suspend fun userRegistration(
         email: String,
         password: String,
@@ -62,9 +98,15 @@ class RemoteFirebaseRepository : FirebaseRepository {
         return try {
             val res = auth.createUserWithEmailAndPassword(email, password)
             val uid = res.user?.uid ?: return Result.Failure(AuthError("Registration failed: missing uid"))
-            // Store a basic user profile. If your UserDto has different fields, adjust accordingly.
-            val userDto = UserDto(email = email, name = name, dogList = dogs)
-            usersCol.document(uid).set(userDto)
+
+            val payload = mapOf(
+                "id" to uid,
+                "email" to email,
+                "ownerName" to name,
+                // Only store dog ids in Users/{uid}.dogList
+                "dogList" to dogs.map { mapOf("id" to it.id) }
+            )
+            usersCol.document(uid).set(payload, merge = true)
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Failure(AuthError(e.message ?: "Registration failed"))
@@ -83,7 +125,6 @@ class RemoteFirebaseRepository : FirebaseRepository {
     override suspend fun updateUser(user: User): Result<Unit, AuthError> {
         return try {
             val uid = currentUid()
-            // Map your domain User -> UserDto using your extension
             val dto = user.toDto()
             usersCol.document(uid).set(dto, merge = true)
             Result.Success(Unit)
@@ -96,12 +137,40 @@ class RemoteFirebaseRepository : FirebaseRepository {
         return try {
             val uid = currentUid()
             val snap = usersCol.document(uid).get()
-            if (!snap.exists) {
-                Result.Failure(AuthError("User not found"))
-            } else {
-                val user = snap.data<UserDto>()
-                Result.Success(user)
+            if (!snap.exists) return Result.Failure(AuthError("User not found"))
+
+            var user = snap.data<UserDto>()
+
+            // Ensure user.id is set (prefer field from doc, else fallback to uid)
+            val storedId = runCatching { snap.get("id") as? String }.getOrNull()
+            user = user.copy(id = if (user.id.isNotBlank()) user.id else (storedId ?: uid))
+
+            // Enrich each dog from Dogs/{id}
+            val enriched = user.dogList.map { d ->
+                if (d.id.isBlank()) d
+                else {
+                    val dogSnap = dogsCol.document(d.id).get()
+                    if (!dogSnap.exists) d
+                    else {
+                        val pic      = runCatching { dogSnap.get("dogPictureUrl") as? String }.getOrNull() ?: d.dogPictureUrl
+                        val name     = runCatching { dogSnap.get("name") as? String }.getOrNull() ?: d.name
+                        val breedStr = runCatching { dogSnap.get("breed") as? String }.getOrNull()
+                        val breed    = breedStr?.let { runCatching { org.example.project.enum.Breed.valueOf(it) }.getOrNull() } ?: d.breed
+                        val weight   = runCatching { dogSnap.get("weight") as? Long }.getOrNull()?.toInt() ?: d.weight
+                        val owner    = runCatching { dogSnap.get("ownerId") as? String }.getOrNull() ?: d.ownerId
+
+                        d.copy(
+                            dogPictureUrl = pic,
+                            name = name,
+                            breed = breed,
+                            weight = weight,
+                            ownerId = owner
+                        )
+                    }
+                }
             }
+
+            Result.Success(user.copy(dogList = enriched))
         } catch (e: Exception) {
             Result.Failure(AuthError(e.message ?: "getUserProfile failed"))
         }
@@ -111,56 +180,38 @@ class RemoteFirebaseRepository : FirebaseRepository {
     // Dogs (update Dogs collection + mirror in Users dogList)
     // ──────────────────────────────
 
-// RemoteFirebaseRepository.kt  (inside addDogAndLinkToUser)
+    override suspend fun addDogAndLinkToUser(dog: DogDto): Result<DogDto, dogError> {
+        return try {
+            val uid = currentUid()
 
-    override suspend fun addDogAndLinkToUser(dog: DogDto): Result<DogDto, dogError> = try {
-        val uid = currentUid()
+            val draft = dog.copy(id = "", ownerId = uid)
+            val ref = dogsCol.add(draft)
+            val newId = ref.id
+            val saved = draft.copy(id = newId)
 
-        // create dog in Dogs with generated id
-        val draft = dog.copy(id = "", ownerId = uid)
-        val ref = dogsCol.add(draft)
-        val newId = ref.id
-        val saved = draft.copy(id = newId)
+            val userRef = usersCol.document(uid)
+            val snap = userRef.get()
+            val user = if (snap.exists) snap.data<UserDto>()
+            else UserDto(email = auth.currentUser?.email ?: "", ownerName = auth.currentUser?.displayName ?: "", dogList = emptyList())
 
-        // mirror into user.dogList (REPLACE any legacy entry: same name + blank id)
-        val userRef = usersCol.document(uid)
-        val snap = userRef.get()
-        val user = if (snap.exists) snap.data<UserDto>()
-        else UserDto(email = auth.currentUser?.email ?: "", name = auth.currentUser?.displayName ?: "", dogList = emptyList())
+            val newList = (user.dogList ?: emptyList()).filter { it.id != newId } + saved
+            userRef.set(user.copy(dogList = newList), merge = true)
 
-        val newList = (user.dogList ?: emptyList())
-            .filterNot {
-                it.id == newId || (it.id.isNullOrBlank() && it.name.equals(draft.name, ignoreCase = true))
-            } + saved
+            Result.Success(saved)
+        } catch (e: Exception) {
+            Result.Failure(dogError(e.message ?: "Add dog failed"))
+        }
 
-        userRef.set(user.copy(dogList = newList), merge = true)
-        Result.Success(saved)
-    } catch (e: Exception) {
-        Result.Failure(dogError(e.message ?: "Add dog failed"))
     }
 
     override suspend fun updateDogAndUser(dog: DogDto): Result<Unit, dogError> {
         return try {
             val uid = currentUid()
+            val id = dog.id.ifBlank { return Result.Failure(dogError("Dog id missing")) }
 
-            // Prefer dog.id, else resolve by (ownerId + name)
-            val resolvedId: String = if (!dog.id.isNullOrBlank()) {
-                dog.id!!
-            } else {
-                val q = dogsCol
-                    .where { "ownerId" equalTo uid }
-                    .where { "name" equalTo dog.name }
-                    .get()
-                q.documents.firstOrNull()?.id
-                    ?: throw IllegalStateException("Dog id missing and no existing dog matched by name")
-            }
+            dogsCol.document(id).set(dog, merge = true)
 
-            val withId = dog.copy(id = resolvedId, ownerId = uid)
 
-            // Update Dogs/{id}
-            dogsCol.document(resolvedId).set(withId, merge = true)
-
-            // Mirror into Users/{uid}.dogList
             val userRef = usersCol.document(uid)
             val snap = userRef.get()
             if (snap.exists) {
@@ -194,10 +245,9 @@ class RemoteFirebaseRepository : FirebaseRepository {
             return try {
                 val uid = currentUid()
 
-                // Delete from Dogs
-                dogsCol.document(dogId).delete()
+            dogsCol.document(dogId).delete()
 
-                // Remove from user's dogList
+
             val userRef = usersCol.document(uid)
             val snap = userRef.get()
             if (snap.exists) {
@@ -219,7 +269,6 @@ class RemoteFirebaseRepository : FirebaseRepository {
     override suspend fun saveDogGardens(items: List<DogGarden>): Result<Unit, AuthError> {
         return try {
             for (g in items) {
-                // If you want auto-id when id empty, do:
                 if (g.id.isNotBlank()) {
                     gardensCol.document(g.id).set(g, merge = true)
                 } else {
@@ -251,7 +300,6 @@ class RemoteFirebaseRepository : FirebaseRepository {
         val snap = gardensCol.get()
         val all = snap.documents.mapNotNull { it.data<DogGarden>() }
 
-        // If your DogGarden has location { latitude, longitude }
         val nearby = all.filter { g ->
             val dist = distanceMeters(
                 latitude,
@@ -282,5 +330,4 @@ class RemoteFirebaseRepository : FirebaseRepository {
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return 6_371_000.0 * c
     }
-
 }

@@ -16,7 +16,7 @@ fun DogDto.toDomain(): Dog = Dog(
     dogBreed       = this.breed,
     // if your DTO’s `isMale` is true → Gender.MALE, else FEMALE
     dogGender      = if (this.isMale) Gender.MALE else Gender.FEMALE,
-    dogPictureUrl  = this.imgUrl,
+    dogPictureUrl  = this.dogPictureUrl,
     isNeutered     = this.isNeutered,
     dogWeight      = this.weight.toInt(),      // DTO weight is Double, domain is Int kg
     isFriendly     = this.isFriendly
@@ -26,7 +26,7 @@ fun DogDto.toDomain(): Dog = Dog(
 fun UserDto.toDomain(uid: String): User = User(
     id        = uid,
     email     = this.email,
-    ownerName = this.name,
+    ownerName = this.ownerName,
     dogList   = this.dogList.map { it.toDomain() }
 )
 
@@ -42,7 +42,7 @@ fun Dog.toDto(ownerId: String): DogDto = DogDto(
     name       = this.dogName,
     breed      = this.dogBreed,
     weight     = this.dogWeight,
-    imgUrl     = this.dogPictureUrl ?: "",
+    dogPictureUrl     = this.dogPictureUrl ?: "",
     isFriendly = this.isFriendly,
     isMale     = (this.dogGender == Gender.MALE),
     isNeutered = this.isNeutered,
@@ -52,6 +52,6 @@ fun Dog.toDto(ownerId: String): DogDto = DogDto(
 /** Convert your domain User → Firestore UserDto (wiring ownerId into each dog) */
 fun User.toDto(): UserDto = UserDto(
     email   = this.email,
-    name    = this.ownerName,
+    ownerName    = this.ownerName,
     dogList = this.dogList.map { it.toDto(this.id) }
 )
