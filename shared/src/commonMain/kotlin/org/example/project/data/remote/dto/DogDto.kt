@@ -1,6 +1,5 @@
 package org.example.project.data.remote.dto
 
-import androidx.compose.foundation.layout.Box
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.example.project.enum.Breed

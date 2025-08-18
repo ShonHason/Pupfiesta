@@ -186,7 +186,7 @@ struct EditProfileView: View {
 
     private func applyUser(_ u: UserDto) {
         email = u.email
-        ownerName = u.name
+        ownerName = u.ownerName
         if let list = u.dogList as? [DogDto] {
             dogs = list.enumerated().map { (i, d) in toCardModel(d, uiFallback: "remote-\(i)-\(d.name)") }
         } else {
@@ -273,7 +273,7 @@ struct EditProfileView: View {
             name: c.name,
             breed: c.breed ?? breeds.first!,
             weight: Int32(c.weight),
-            imgUrl: "",
+            dogPictureUrl: "",
             isFriendly: c.isFriendly,
             isMale: c.isMale,
             isNeutered: c.isNeutered,
@@ -287,7 +287,7 @@ struct EditProfileView: View {
             name: c.name,
             breed: c.breed ?? breeds.first!,
             weight: Int32(c.weight),
-            imgUrl: "",
+            dogPictureUrl: "",
             isFriendly: c.isFriendly,
             isMale: c.isMale,
             isNeutered: c.isNeutered,
