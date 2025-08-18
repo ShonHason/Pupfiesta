@@ -91,48 +91,42 @@ class DogsViewModel(
         val init = _dogsState.value as? DogsState.Initial ?: return
         val data = init.data
 
+        val safeBreed = data.breed ?: org.example.project.enum.Breed.MIXED
+
         val errors = buildList {
             if (data.name.isBlank()) add("Dog name cannot be empty")
-            if (data.breed == null)  add("Breed must be selected")
             if (data.weight !in 1..200) add("Weight must be between 1 and 200")
+            // no error for null breed — we defaulted to MIXED
         }
 
-        updateState { copy(errors = errors) }
+        // reflect the default in UI
+        updateState { copy(breed = safeBreed, errors = errors) }
         if (errors.isNotEmpty()) return
 
         val dto = DogDto(
-            id         = data.id,
-            name       = data.name,
-            breed      = data.breed!!,               // validated non-null above
-            weight     = data.weight,
-            dogPictureUrl     = data.imgUrl.orEmpty(),
-            isFriendly = data.isFriendly,
-            isMale     = data.isMale,
-            isNeutered = data.isNeutered,
-            ownerId    = data.ownerId
+            id            = data.id,
+            name          = data.name,
+            breed         = safeBreed,                       // <- no !!
+            weight        = data.weight,
+            dogPictureUrl = data.imgUrl.orEmpty(),
+            isFriendly    = data.isFriendly,
+            isMale        = data.isMale,
+            isNeutered    = data.isNeutered,
+            ownerId       = data.ownerId
         )
 
         scope.launch {
             _dogsState.value = DogsState.Loading
+            val result: Result<*, *> =
+                if (data.id.isBlank()) firebaseRepo.addDogAndLinkToUser(dto)
+                else                    firebaseRepo.updateDogAndUser(dto)
 
-            val result: Result<*, *> = if (data.id.isBlank()) {
-                // NEW → add to Dogs + link into User.dogList
-                firebaseRepo.addDogAndLinkToUser(dto)
-            } else {
-                // EXISTING → update in Dogs + mirror in User.dogList
-                firebaseRepo.updateDogAndUser(dto)
-            }
-
-            when (result) {
+            _dogsState.value = when (result) {
                 is Result.Success -> {
                     delay(200)
-                    _dogsState.value = DogsState.Loaded
+                    DogsState.Loaded
                 }
-                is Result.Failure -> {
-                    _dogsState.value = DogsState.Error(
-                        result.error?.toString() ?: "Save failed"
-                    )
-                }
+                is Result.Failure -> DogsState.Error(result.error?.toString() ?: "Save failed")
             }
         }
     }
