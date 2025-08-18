@@ -106,7 +106,7 @@ class DogsViewModel(
         val dto = DogDto(
             id            = data.id,
             name          = data.name,
-            breed         = safeBreed,                       // <- no !!
+            breed         = safeBreed,
             weight        = data.weight,
             dogPictureUrl = data.imgUrl.orEmpty(),
             isFriendly    = data.isFriendly,
