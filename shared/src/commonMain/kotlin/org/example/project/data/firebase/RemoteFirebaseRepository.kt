@@ -201,6 +201,7 @@ class RemoteFirebaseRepository : FirebaseRepository {
         } catch (e: Exception) {
             Result.Failure(dogError(e.message ?: "Add dog failed"))
         }
+
     }
 
     override suspend fun updateDogAndUser(dog: DogDto): Result<Unit, dogError> {
@@ -210,11 +211,25 @@ class RemoteFirebaseRepository : FirebaseRepository {
 
             dogsCol.document(id).set(dog, merge = true)
 
+
             val userRef = usersCol.document(uid)
             val snap = userRef.get()
             if (snap.exists) {
                 val user = snap.data<UserDto>()
-                val updated = (user.dogList ?: emptyList()).map { if (it.id == id) dog else it }
+                val src = user.dogList ?: emptyList()
+
+                val updated =
+                    if (src.any { it.id == resolvedId }) {
+                        src.map { if (it.id == resolvedId) withId else it }
+                    } else if (src.any { it.id.isNullOrBlank() && it.name.equals(dog.name, ignoreCase = true) }) {
+                        // backfill legacy entry that had no id
+                        src.map {
+                            if (it.id.isNullOrBlank() && it.name.equals(dog.name, ignoreCase = true)) withId else it
+                        }
+                    } else {
+                        src + withId
+                    }
+
                 userRef.set(user.copy(dogList = updated), merge = true)
             }
 
@@ -224,12 +239,14 @@ class RemoteFirebaseRepository : FirebaseRepository {
         }
     }
 
+
     override suspend fun deleteDogAndUser(dogId: String): Result<Unit, dogError> {
-        platformLogger("FIREBASE", "Deleting dog $dogId")
-        return try {
-            val uid = currentUid()
+            platformLogger("FIREBASE", "Deleting dog $dogId")
+            return try {
+                val uid = currentUid()
 
             dogsCol.document(dogId).delete()
+
 
             val userRef = usersCol.document(uid)
             val snap = userRef.get()

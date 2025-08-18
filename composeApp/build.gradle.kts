@@ -5,12 +5,8 @@ import java.util.Properties
 
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
-    if (f.exists()) {
-        (f.inputStream().use { load(it) })
-    }
+    if (f.exists()) f.inputStream().use { load(it) }
 }
-
-
 
 val mapsKey: String = (
         localProps.getProperty("GOOGLE_MAPS_API_KEY")
@@ -47,22 +43,24 @@ kotlin {
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.lottie.compose)
                 implementation("io.insert-koin:koin-androidx-compose:3.5.6")
-
                 implementation(libs.androidx.material.icons.extended)
-                val gitlive = "2.2.0"
+
+                // GitLive (version aligned with :shared / Kotlin 2.1.x)
+                val gitlive = "2.1.0" // was 2.2.0
                 implementation("dev.gitlive:firebase-common:$gitlive")
                 implementation("dev.gitlive:firebase-auth:$gitlive")
                 implementation("dev.gitlive:firebase-firestore:$gitlive")
+
                 implementation(libs.coil.compose)
-                implementation("androidx.activity:activity-compose:1.7.2")
                 implementation("androidx.navigation:navigation-compose:2.7.0")
                 implementation("com.google.accompanist:accompanist-permissions:0.32.0")
 
-                implementation("com.google.android.gms:play-services-location:21.0.1")
+                // Google Play Services
+                implementation("com.google.android.gms:play-services-location:21.3.0")
                 implementation("com.google.android.gms:play-services-maps:18.1.0")
                 implementation("com.google.maps.android:maps-compose:2.11.3")
 
-                // Ktor (needed because MainActivity references HttpClient via httpClient())
+                // Ktor
                 implementation("io.ktor:ktor-client-core:$ktor")
                 implementation("io.ktor:ktor-client-okhttp:$ktor")
                 implementation("io.ktor:ktor-client-content-negotiation:$ktor")
@@ -83,7 +81,6 @@ kotlin {
                 implementation("io.coil-kt.coil3:coil-compose:3.3.0")
                 implementation("io.coil-kt.coil3:coil-network-ktor2:3.3.0")
 
-                // depends on the shared module
                 implementation(projects.shared)
             }
         }
@@ -105,17 +102,13 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // Maps key from gradle.properties → AndroidManifest
+        // Maps key → AndroidManifest
         manifestPlaceholders["com.google.android.geo.API_KEY"] = mapsKey
-
-
     }
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
-
-
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -125,8 +118,5 @@ android {
 
 dependencies {
     implementation(libs.cloudinary.android)
-
-
     debugImplementation(compose.uiTooling)
-
 }
