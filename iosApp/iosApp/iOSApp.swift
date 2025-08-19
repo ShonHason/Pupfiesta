@@ -5,14 +5,11 @@ import FirebaseCore
 @main
 struct iOSApp: App {
     init() {
-        print("WhenInUse:", Bundle.main.object(
-                 forInfoDictionaryKey: "NSLocationWhenInUseUsageDescription"
-               ) as? String ?? "MISSING")
-        FirebaseApp.configure()       }
+        FirebaseApp.configure()
+        KoinBridge.shared.start()   // ← most common export for Kotlin object
+    }
 
     var body: some Scene {
-        WindowGroup {
-            LandingView()
-        }
+        WindowGroup { LandingView() }
     }
 }

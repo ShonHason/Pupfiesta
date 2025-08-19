@@ -1,7 +1,5 @@
-//
 //  EditProfileView.swift
 //  iosApp
-//
 
 import SwiftUI
 import Shared
@@ -36,30 +34,25 @@ private func breedByName(_ name: String, from breeds: [Breed]) -> Breed? {
 }
 
 // MARK: - UI model
-
 private struct DogCardModel: Identifiable, Equatable {
-    var id: String                 // UI id (backend id if present)
-    var backendId: String          // Firestore doc id ("" for new/temp)
+    var id: String
+    var backendId: String
     var name: String
     var breed: Breed?
     var weight: Int
     var isMale: Bool
     var isNeutered: Bool
     var isFriendly: Bool
-
-    // Images
-    var localImage: UIImage?       // just-picked image preview
-    var remoteImageURL: String?    // already-saved photo URL
-
-    // temp marker
+    var localImage: UIImage?
+    var remoteImageURL: String?
     var isTemp: Bool { backendId.isEmpty && id.hasPrefix("temp-") }
 }
 
 // MARK: - View
-
 @MainActor
 struct EditProfileView: View {
     let dogsViewModel: DogsViewModel
+    var onLogout: () -> Void = {}   // optional, we’ll also present LoginView ourselves
 
     // cached breeds
     @State private var breeds: [Breed] = allBreeds()
@@ -74,7 +67,7 @@ struct EditProfileView: View {
     @State private var isEditing = false
     @State private var workingDog: DogCardModel? = nil
     @State private var selectedBreedName: String = ""
-    @State private var originalDogBeforeEdit: DogCardModel? = nil   // snapshot for Cancel
+    @State private var originalDogBeforeEdit: DogCardModel? = nil
 
     // delete confirm
     @State private var showDeleteConfirm = false
@@ -86,11 +79,16 @@ struct EditProfileView: View {
     // upload state
     @State private var isUploading = false
     @State private var uploadError: String? = nil
-    @State private var uploadedUrl: String? = nil   // latest Cloudinary URL
+    @State private var uploadedUrl: String? = nil
 
     // ux
     @State private var busy = false
     @State private var errorMessage = ""
+
+    // logout
+    @State private var isLoggingOut = false
+    @State private var logoutObserver: Task<Void, Never>? = nil
+    @State private var showLogin = false   // present LoginView full-screen
 
     private var addingTempDog: Bool { dogs.contains { $0.isTemp } }
 
@@ -102,7 +100,7 @@ struct EditProfileView: View {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topTrailing) {
             screenGradient.ignoresSafeArea()
 
             ScrollView {
@@ -148,8 +146,28 @@ struct EditProfileView: View {
                 }
                 .padding(.vertical, 16)
             }
+
+            // Floating Logout (works even without NavigationStack)
+            Button(action: performLogout) {
+                HStack(spacing: 6) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                    Text(isLoggingOut ? "Logging out…" : "Logout")
+                }
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 0.6))
+                .shadow(radius: 2)
+            }
+            .disabled(isLoggingOut)
+            .padding(.top, 10)
+            .padding(.trailing, 12)
         }
         .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Profile") // will show if embedded in NavigationStack
+
         .task { await initialLoad() }
         .sheet(isPresented: $showImagePicker, onDismiss: handlePickedImage) {
             PhotoPicker(image: $pickedUIImage)
@@ -164,14 +182,54 @@ struct EditProfileView: View {
             Button("OK") { errorMessage = "" }
         } message: { Text(errorMessage) }
         .onChange(of: isEditing) { newValue in
-            if newValue, let w = workingDog {
-                originalDogBeforeEdit = w
+            if newValue, let w = workingDog { originalDogBeforeEdit = w }
+        }
+        .onAppear { startLogoutObserver() }
+        .onDisappear {
+            logoutObserver?.cancel()
+            logoutObserver = nil
+        }
+        // Present login screen after successful logout (no parent changes needed)
+        .fullScreenCover(isPresented: $showLogin) {
+            // Go back to your app’s entry point; no VM init in Swift needed
+            LandingView()                                  // ✅
+        }
+
+    }
+
+    // MARK: - Logout
+    private func performLogout() {
+        guard !isLoggingOut else { return }
+        isLoggingOut = true
+        // KMM sealed object usually bridged as DogsEventOnLogOut.shared
+        dogsViewModel.onEvent(event: DogsEventOnLogOut.shared)  // ✅
+    }
+
+    private func startLogoutObserver() {
+        logoutObserver?.cancel()
+        logoutObserver = Task {
+            for await state in dogsViewModel.dogsState {
+                await MainActor.run {
+                    guard isLoggingOut else { return }
+                    switch state {
+                    case is DogsState.Loading:
+                        break
+                    case is DogsState.Loaded:
+                        isLoggingOut = false
+                        showLogin = true          // present LoginView full-screen
+                        onLogout()                // also notify parent if it cares
+                    case let e as DogsState.Error:
+                        isLoggingOut = false
+                        errorMessage = e.message
+                    default:
+                        break
+                    }
+                }
             }
         }
     }
 
     // MARK: - load & mapping
-
     private func initialLoad() async {
         if selectedBreedName.isEmpty { selectedBreedName = breeds.first?.name ?? "" }
         do {
@@ -236,7 +294,6 @@ struct EditProfileView: View {
     }
 
     // MARK: - Add/Select
-
     private func handleSelectDog(_ dog: DogCardModel) {
         if selectedDogId == dog.id {
             selectedDogId = nil
@@ -247,7 +304,6 @@ struct EditProfileView: View {
             workingDog = dog
             selectedBreedName = dog.breed?.name ?? (breeds.first?.name ?? "")
             isEditing = false
-            // reset any pending upload state for clarity
             uploadError = nil
             uploadedUrl = nil
             isUploading = false
@@ -282,18 +338,15 @@ struct EditProfileView: View {
     }
 
     // MARK: - Image picking / uploading
-
     private func handlePickedImage() {
         guard var w = workingDog, let img = pickedUIImage else { return }
         w.localImage = img
         workingDog = w
 
-        // start upload to Cloudinary
         uploadError = nil
         uploadedUrl = nil
         isUploading = true
 
-        // compress and upload
         DispatchQueue.global(qos: .userInitiated).async {
             let jpeg = img.jpegData(compressionQuality: 0.9)
             DispatchQueue.main.async {
@@ -307,7 +360,6 @@ struct EditProfileView: View {
                         self.isUploading = false
                         if let url = url, !url.isEmpty {
                             self.uploadedUrl = url
-                            // also update workingDog.remoteImageURL so UI shows ✓ even after refresh
                             if var wd = self.workingDog {
                                 wd.remoteImageURL = url
                                 self.workingDog = wd
@@ -322,7 +374,6 @@ struct EditProfileView: View {
     }
 
     // MARK: - Save/Cancel/Delete
-
     private func toDtoAdd(_ c: DogCardModel) -> DogDto {
         DogDto(
             id: "",
@@ -360,14 +411,12 @@ struct EditProfileView: View {
             }
         }
         isEditing = false
-        // reset upload UI state
         uploadError = nil
         uploadedUrl = nil
         isUploading = false
     }
 
     private func handleSave(_ toSave: DogCardModel) async {
-        // don’t allow save while uploading
         if isUploading {
             errorMessage = "Please wait for the photo upload to finish."
             return
@@ -378,10 +427,7 @@ struct EditProfileView: View {
 
         do {
             if toSave.backendId.isEmpty {
-                // ADD
                 let saved = try await dogsViewModel.addDogAndLinkToUserOrThrow(dog: toDtoAdd(toSave))
-
-                // patch temp chip to real
                 let newId = saved.id
                 if !newId.isEmpty, let idx = dogs.firstIndex(where: { $0.id == toSave.id }) {
                     var patched = toSave
@@ -404,10 +450,8 @@ struct EditProfileView: View {
                 }
                 isEditing = false
             } else {
-                // UPDATE
                 try await dogsViewModel.updateDogAndUserOrThrow(dog: toDtoUpdate(toSave))
 
-                // optimistic local patch
                 if let idx = dogs.firstIndex(where: { $0.id == toSave.id }) {
                     var patched = toSave
                     patched.remoteImageURL = uploadedUrl ?? toSave.remoteImageURL
@@ -424,7 +468,6 @@ struct EditProfileView: View {
                 isEditing = false
             }
 
-            // clear transient upload state after successful save
             uploadedUrl = nil
             uploadError = nil
         } catch {
@@ -433,20 +476,13 @@ struct EditProfileView: View {
     }
 
     private func confirmDelete() async {
-        platformLogger(tag: "PUP", message: "DEL1 selectedDogId=\(selectedDogId ?? "nil")")
-
         guard let sel = selectedDogId,
-              let d = dogs.first(where: { $0.id == sel }) else {
-            platformLogger(tag: "PUP", message: "DEL2 no dog for selected id")
-            return
-        }
+              let d = dogs.first(where: { $0.id == sel }) else { return }
 
-        platformLogger(tag: "PUP", message: "DEL3 candidate uiId=\(d.id) backendId=\(d.backendId) isTemp=\(d.isTemp)")
         busy = true
         defer { busy = false }
 
         if d.isTemp {
-            platformLogger(tag: "PUP", message: "DEL4 temp → local remove only")
             dogs.removeAll { $0.id == sel }
             selectedDogId = nil
             workingDog = nil
@@ -456,9 +492,7 @@ struct EditProfileView: View {
 
         do {
             let idOrName = d.backendId.isEmpty ? d.name : d.backendId
-            platformLogger(tag: "PUP", message: "DEL5 calling VM delete idOrName=\(idOrName)")
             try await dogsViewModel.deleteDogAndUserOrThrow(dogId: idOrName)
-            platformLogger(tag: "PUP", message: "DEL6 VM delete finished OK")
 
             let user = try await dogsViewModel.getUserOrThrow()
             applyUser(user)
@@ -466,15 +500,12 @@ struct EditProfileView: View {
             selectedDogId = nil
             workingDog = nil
             isEditing = false
-            platformLogger(tag: "PUP", message: "DEL7 UI refreshed (dogs.count=\(dogs.count))")
         } catch {
-            platformLogger(tag: "PUP", message: "DELX error \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
     }
 
     // MARK: - Owner header
-
     private struct OwnerHeader: View {
         let ownerName: String
         let email: String
@@ -489,7 +520,6 @@ struct EditProfileView: View {
     }
 
     // MARK: - 5-per-row grid
-
     private struct DogGrid: View {
         let dogs: [DogCardModel]
         let selectedDogId: String?
@@ -552,7 +582,6 @@ struct EditProfileView: View {
     }
 
     // MARK: - Details card
-
     private struct DogDetailsCard: View {
         @Binding var working: DogCardModel
         @Binding var isEditing: Bool
@@ -634,7 +663,6 @@ struct EditProfileView: View {
                                 working.breed = b
                             }
                             onSave(working)
-                            // isEditing toggled in parent after successful save
                         } else {
                             isEditing = true
                         }
@@ -701,7 +729,6 @@ struct EditProfileView: View {
     }
 
     // MARK: - Avatar
-
     private struct DogAvatar: View {
         let dog: DogCardModel
         var showCheck: Bool
@@ -717,7 +744,6 @@ struct EditProfileView: View {
             ZStack {
                 Circle().fill(Color(.secondarySystemBackground))
 
-                // Display order: local image (fresh pick) → remote URL → placeholder
                 if let img = dog.localImage {
                     Image(uiImage: img).resizable().scaledToFill()
                 } else if let urlStr = dog.remoteImageURL, let url = URL(string: urlStr) {

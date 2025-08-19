@@ -36,8 +36,8 @@ fun appModules() = listOf(commonModule, platformModule, domainModule, presentati
 
 val domainModule = module {
 //    // Domain: bind interfaces to implementations
- //   singleOf(::RemoteFirebaseRepository) bind FirebaseRepository::class
-   // singleOf(::GoogleGardensRepository) bind GardensRepository::class
+    //   singleOf(::RemoteFirebaseRepository) bind FirebaseRepository::class
+    // singleOf(::GoogleGardensRepository) bind GardensRepository::class
 }
 // Each platform will provide this (engine + API key)
 expect val platformModule: Module
@@ -46,7 +46,7 @@ val commonModule = module {
     singleOf(::createJson)
     single { createHttpClient(get(), get()) }
     singleOf(::RemoteFirebaseRepository) bind FirebaseRepository::class
-   singleOf(::GoogleGardensRepository) bind GardensRepository::class
+    singleOf(::GoogleGardensRepository) bind GardensRepository::class
 
     // Data: bind implementations to interfaces
     single<GardensRepository> {
@@ -71,7 +71,7 @@ val presentationModule = module {
     }
     single { DogsViewModel(firebaseRepo = get()) }
     single {
-       UserViewModel(
+        UserViewModel(
             firebaseRepo = get()
         )
     }

@@ -23,4 +23,6 @@ sealed interface DogsEvent {
 
     /** Attempt to save current form (add or update by id) */
     data object OnSave : DogsEvent
+
+    data object OnLogOut : DogsEvent
 }

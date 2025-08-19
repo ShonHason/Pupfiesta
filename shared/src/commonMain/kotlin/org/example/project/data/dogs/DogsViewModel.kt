@@ -56,6 +56,9 @@ class DogsViewModel(
             DogsEvent.ResetState             -> resetState()
             is DogsEvent.LoadFromDto         -> loadFormFromDto(event.dog)
             DogsEvent.OnSave                 -> validateAndSave()
+
+            // ✅ NEW: handle singleton logout event called from Swift
+            is DogsEvent.OnLogOut             -> logOut()
         }
     }
 
@@ -96,10 +99,8 @@ class DogsViewModel(
         val errors = buildList {
             if (data.name.isBlank()) add("Dog name cannot be empty")
             if (data.weight !in 1..200) add("Weight must be between 1 and 200")
-            // no error for null breed — we defaulted to MIXED
         }
 
-        // reflect the default in UI
         updateState { copy(breed = safeBreed, errors = errors) }
         if (errors.isNotEmpty()) return
 
@@ -131,6 +132,23 @@ class DogsViewModel(
         }
     }
 
+    // ─────────────── NEW: Logout via repo ───────────────
+
+    private fun logOut() {
+        scope.launch {
+            _dogsState.value = DogsState.Loading
+            when (val r = firebaseRepo.logout()) {
+                is Result.Success -> {
+                    // Emit a state your Swift observer already treats as "done"
+                    _dogsState.value = DogsState.Loaded
+                }
+                is Result.Failure -> {
+                    _dogsState.value = DogsState.Error(r.error?.message ?: "Logout failed")
+                }
+            }
+        }
+    }
+
     // ─────────────── Public API (Result style) ───────────────
 
     suspend fun getUser(): Result<UserDto, AuthError> {
@@ -142,7 +160,6 @@ class DogsViewModel(
         return r
     }
 
-    // New names matching your repository
     suspend fun addDogAndLinkToUser(dog: DogDto): Result<DogDto, dogError> =
         firebaseRepo.addDogAndLinkToUser(dog)
 
@@ -157,7 +174,6 @@ class DogsViewModel(
     @Throws(Exception::class)
     suspend fun getUserOrThrow(): UserDto {
         return when (val r = firebaseRepo.getUserProfile()) {
-
             is Result.Success -> r.data ?: throw Exception("Empty user payload")
             is Result.Failure -> throw Exception(r.error?.message ?: "Failed to get current user")
         }
