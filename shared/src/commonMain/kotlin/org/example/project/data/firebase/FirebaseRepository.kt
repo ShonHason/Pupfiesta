@@ -12,7 +12,7 @@ import org.example.project.data.local.Result
 interface FirebaseRepository {
     // User
     suspend fun userLogin(email: String, password: String): Result<Unit, AuthError>
-    suspend fun userRegistration(email: String, password: String, name: String, dogs: List<DogDto>): Result<Unit, AuthError>
+    suspend fun userRegistration(email: String, password: String, name: String, dogs: List<DogDto>): Result<UserDto, AuthError>
     suspend fun logout(): Result<Unit, AuthError>
     suspend fun updateUser(user: User): Result<Unit, AuthError>
     suspend fun getUserProfile(): Result<UserDto, AuthError>

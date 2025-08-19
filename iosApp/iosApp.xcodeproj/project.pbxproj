@@ -12,6 +12,7 @@
 		C5745EFD2E3924F9003EA0F2 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = C5745EFC2E3924F9003EA0F2 /* FirebaseAuth */; };
 		C5745EFF2E3924F9003EA0F2 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = C5745EFE2E3924F9003EA0F2 /* FirebaseCore */; };
 		C5745F012E3924F9003EA0F2 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = C5745F002E3924F9003EA0F2 /* FirebaseFirestore */; };
+		C596F1F82E544A2F00EB896E /* Cloudinary in Frameworks */ = {isa = PBXBuildFile; productRef = C596F1F72E544A2F00EB896E /* Cloudinary */; };
 		C5EDBF1A2E30E2BD0061B713 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = C5EDBF192E30E2BD0061B713 /* Lottie */; };
 /* End PBXBuildFile section */
 
@@ -51,6 +52,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C596F1F82E544A2F00EB896E /* Cloudinary in Frameworks */,
 				C5745EF92E3924F9003EA0F2 /* FirebaseAnalytics in Frameworks */,
 				C5745EFF2E3924F9003EA0F2 /* FirebaseCore in Frameworks */,
 				C5EDBF1A2E30E2BD0061B713 /* Lottie in Frameworks */,
@@ -108,6 +110,7 @@
 				C5745EFC2E3924F9003EA0F2 /* FirebaseAuth */,
 				C5745EFE2E3924F9003EA0F2 /* FirebaseCore */,
 				C5745F002E3924F9003EA0F2 /* FirebaseFirestore */,
+				C596F1F72E544A2F00EB896E /* Cloudinary */,
 			);
 			productName = iosApp;
 			productReference = B9DA97B12DC1472C00A4DA20 /* iosApp
@@ -142,6 +145,7 @@
 				C5EDBF182E30E2BD0061B713 /* XCRemoteSwiftPackageReference "lottie-ios" */,
 				C5745EF72E3924F9003EA0F2 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				C596F1442E524FB100EB896E /* XCRemoteSwiftPackageReference "GoogleAppMeasurement" */,
+				C596F1F62E544A2F00EB896E /* XCRemoteSwiftPackageReference "cloudinary_ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B9DA97B22DC1472C00A4DA20 /* Products */;
@@ -431,6 +435,14 @@
 				minimumVersion = 11.0.0;
 			};
 		};
+		C596F1F62E544A2F00EB896E /* XCRemoteSwiftPackageReference "cloudinary_ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/cloudinary/cloudinary_ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.2.3;
+			};
+		};
 		C5EDBF182E30E2BD0061B713 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/airbnb/lottie-ios.git";
@@ -466,6 +478,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C5745EF72E3924F9003EA0F2 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		C596F1F72E544A2F00EB896E /* Cloudinary */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C596F1F62E544A2F00EB896E /* XCRemoteSwiftPackageReference "cloudinary_ios" */;
+			productName = Cloudinary;
 		};
 		C5EDBF192E30E2BD0061B713 /* Lottie */ = {
 			isa = XCSwiftPackageProductDependency;

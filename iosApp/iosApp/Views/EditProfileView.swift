@@ -7,7 +7,7 @@ import SwiftUI
 import Shared
 import UIKit
 
-// MARK: - Breed helpers
+// MARK: - Background
 private let screenGradient = LinearGradient(
     colors: [
         Color(red: 252/255, green: 241/255, blue: 196/255),
@@ -17,8 +17,9 @@ private let screenGradient = LinearGradient(
     endPoint: .bottomTrailing
 )
 
+// MARK: - Breed helpers (KMM bridge)
 private func allBreeds() -> [Breed] {
-    let arr = SwiftBridge().allBreeds()
+    let arr = SwiftBridge().allBreeds() // KotlinArray<Breed>
     var out: [Breed] = []
     let n = Int(arr.size)
     out.reserveCapacity(n)
@@ -36,23 +37,23 @@ private func breedByName(_ name: String, from breeds: [Breed]) -> Breed? {
 
 // MARK: - UI model
 
-// EditProfileView.swift
-
-private struct DogCardModel: Identifiable {
-    var id: String
-    var backendId: String
+private struct DogCardModel: Identifiable, Equatable {
+    var id: String                 // UI id (backend id if present)
+    var backendId: String          // Firestore doc id ("" for new/temp)
     var name: String
     var breed: Breed?
     var weight: Int
     var isMale: Bool
     var isNeutered: Bool
     var isFriendly: Bool
-    var localImage: UIImage?
 
-    // ONLY actual temp UI items are "temp"
+    // Images
+    var localImage: UIImage?       // just-picked image preview
+    var remoteImageURL: String?    // already-saved photo URL
+
+    // temp marker
     var isTemp: Bool { backendId.isEmpty && id.hasPrefix("temp-") }
 }
-
 
 // MARK: - View
 
@@ -78,9 +79,14 @@ struct EditProfileView: View {
     // delete confirm
     @State private var showDeleteConfirm = false
 
-    // photo
+    // photo picking
     @State private var showImagePicker = false
     @State private var pickedUIImage: UIImage? = nil
+
+    // upload state
+    @State private var isUploading = false
+    @State private var uploadError: String? = nil
+    @State private var uploadedUrl: String? = nil   // latest Cloudinary URL
 
     // ux
     @State private var busy = false
@@ -97,7 +103,7 @@ struct EditProfileView: View {
 
     var body: some View {
         ZStack {
-            screenGradient.ignoresSafeArea()   // background layer
+            screenGradient.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -122,9 +128,13 @@ struct EditProfileView: View {
                             working: unwrap($workingDog, defaultValue: placeholderDog()),
                             isEditing: $isEditing,
                             selectedBreedName: $selectedBreedName,
+                            isUploading: $isUploading,
+                            uploadError: $uploadError,
+                            uploadedUrl: $uploadedUrl,
                             onTapAvatar: {
                                 guard isEditing else { return }
                                 pickedUIImage = nil
+                                uploadError = nil
                                 showImagePicker = true
                             },
                             onSave: { toSave in
@@ -141,11 +151,7 @@ struct EditProfileView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .task { await initialLoad() }
-        .sheet(isPresented: $showImagePicker, onDismiss: {
-            guard var w = workingDog, let img = pickedUIImage else { return }
-            w.localImage = img
-            workingDog = w
-        }) {
+        .sheet(isPresented: $showImagePicker, onDismiss: handlePickedImage) {
             PhotoPicker(image: $pickedUIImage)
         }
         .confirmationDialog("Delete this dog?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
@@ -198,7 +204,7 @@ struct EditProfileView: View {
     }
 
     private func toCardModel(_ d: DogDto, uiFallback: String) -> DogCardModel {
-        let backendId = d.id ?? ""
+        let backendId = d.id
         let uiId = backendId.isEmpty ? uiFallback : backendId
         return DogCardModel(
             id: uiId,
@@ -209,7 +215,8 @@ struct EditProfileView: View {
             isMale: d.isMale,
             isNeutered: d.isNeutered,
             isFriendly: d.isFriendly,
-            localImage: nil
+            localImage: nil,
+            remoteImageURL: (d.dogPictureUrl.isEmpty == false) ? d.dogPictureUrl : nil
         )
     }
 
@@ -223,7 +230,8 @@ struct EditProfileView: View {
             isMale: true,
             isNeutered: false,
             isFriendly: true,
-            localImage: nil
+            localImage: nil,
+            remoteImageURL: nil
         )
     }
 
@@ -239,6 +247,10 @@ struct EditProfileView: View {
             workingDog = dog
             selectedBreedName = dog.breed?.name ?? (breeds.first?.name ?? "")
             isEditing = false
+            // reset any pending upload state for clarity
+            uploadError = nil
+            uploadedUrl = nil
+            isUploading = false
         }
     }
 
@@ -253,7 +265,8 @@ struct EditProfileView: View {
             isMale: true,
             isNeutered: false,
             isFriendly: true,
-            localImage: nil
+            localImage: nil,
+            remoteImageURL: nil
         )
         while dogs.contains(where: { $0.id == dog.id }) {
             dog.id = "temp-\(UUID().uuidString)"
@@ -263,6 +276,49 @@ struct EditProfileView: View {
         workingDog = dog
         selectedBreedName = dog.breed?.name ?? (breeds.first?.name ?? "")
         isEditing = true
+        uploadError = nil
+        uploadedUrl = nil
+        isUploading = false
+    }
+
+    // MARK: - Image picking / uploading
+
+    private func handlePickedImage() {
+        guard var w = workingDog, let img = pickedUIImage else { return }
+        w.localImage = img
+        workingDog = w
+
+        // start upload to Cloudinary
+        uploadError = nil
+        uploadedUrl = nil
+        isUploading = true
+
+        // compress and upload
+        DispatchQueue.global(qos: .userInitiated).async {
+            let jpeg = img.jpegData(compressionQuality: 0.9)
+            DispatchQueue.main.async {
+                guard let data = jpeg else {
+                    self.isUploading = false
+                    self.uploadError = "Failed to encode image"
+                    return
+                }
+                CloudinaryUploader.upload(data) { url in
+                    DispatchQueue.main.async {
+                        self.isUploading = false
+                        if let url = url, !url.isEmpty {
+                            self.uploadedUrl = url
+                            // also update workingDog.remoteImageURL so UI shows ✓ even after refresh
+                            if var wd = self.workingDog {
+                                wd.remoteImageURL = url
+                                self.workingDog = wd
+                            }
+                        } else {
+                            self.uploadError = "Upload failed"
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Save/Cancel/Delete
@@ -273,7 +329,7 @@ struct EditProfileView: View {
             name: c.name,
             breed: c.breed ?? breeds.first!,
             weight: Int32(c.weight),
-            dogPictureUrl: "",
+            dogPictureUrl: (uploadedUrl ?? c.remoteImageURL) ?? "",
             isFriendly: c.isFriendly,
             isMale: c.isMale,
             isNeutered: c.isNeutered,
@@ -287,7 +343,7 @@ struct EditProfileView: View {
             name: c.name,
             breed: c.breed ?? breeds.first!,
             weight: Int32(c.weight),
-            dogPictureUrl: "",
+            dogPictureUrl: (uploadedUrl ?? c.remoteImageURL) ?? "",
             isFriendly: c.isFriendly,
             isMale: c.isMale,
             isNeutered: c.isNeutered,
@@ -304,11 +360,22 @@ struct EditProfileView: View {
             }
         }
         isEditing = false
+        // reset upload UI state
+        uploadError = nil
+        uploadedUrl = nil
+        isUploading = false
     }
 
     private func handleSave(_ toSave: DogCardModel) async {
+        // don’t allow save while uploading
+        if isUploading {
+            errorMessage = "Please wait for the photo upload to finish."
+            return
+        }
+
         busy = true
         defer { busy = false }
+
         do {
             if toSave.backendId.isEmpty {
                 // ADD
@@ -320,6 +387,7 @@ struct EditProfileView: View {
                     var patched = toSave
                     patched.backendId = newId
                     patched.id = newId
+                    patched.remoteImageURL = uploadedUrl ?? toSave.remoteImageURL
                     dogs[idx] = patched
                     selectedDogId = patched.id
                     workingDog = patched
@@ -327,8 +395,7 @@ struct EditProfileView: View {
 
                 let user = try await dogsViewModel.getUserOrThrow()
                 applyUser(user)
-
-                if !saved.id.isEmpty, let found = dogs.first(where: { $0.backendId == saved.id }) {
+                if let found = dogs.first(where: { $0.backendId == newId }) {
                     selectedDogId = found.id
                     workingDog = found
                     selectedBreedName = found.breed?.name ?? (breeds.first?.name ?? "")
@@ -342,7 +409,9 @@ struct EditProfileView: View {
 
                 // optimistic local patch
                 if let idx = dogs.firstIndex(where: { $0.id == toSave.id }) {
-                    dogs[idx] = toSave
+                    var patched = toSave
+                    patched.remoteImageURL = uploadedUrl ?? toSave.remoteImageURL
+                    dogs[idx] = patched
                 }
 
                 let user = try await dogsViewModel.getUserOrThrow()
@@ -354,6 +423,10 @@ struct EditProfileView: View {
                 }
                 isEditing = false
             }
+
+            // clear transient upload state after successful save
+            uploadedUrl = nil
+            uploadError = nil
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -424,11 +497,7 @@ struct EditProfileView: View {
         let onSelect: (DogCardModel) -> Void
         let onAdd: () -> Void
 
-        // exactly 5 columns, nicely spaced
-        private let columns = Array(
-            repeating: GridItem(.flexible(minimum: 40), spacing: 12, alignment: .center),
-            count: 5
-        )
+        private let columns = Array(repeating: GridItem(.flexible(minimum: 40), spacing: 12, alignment: .center), count: 5)
 
         var body: some View {
             LazyVGrid(columns: columns, alignment: .center, spacing: 14) {
@@ -439,10 +508,9 @@ struct EditProfileView: View {
                         disabled: busy
                     ) { onSelect(dog) }
                 }
-                // Always show the + tile (won't disappear after 5 items)
                 AddGridTile(disabled: busy, action: onAdd)
             }
-            .padding(.bottom, 8) // avoid bottom clipping
+            .padding(.bottom, 8)
         }
     }
 
@@ -454,10 +522,10 @@ struct EditProfileView: View {
 
         var body: some View {
             Button(action: action) {
-                DogAvatar(dog: dog)
-                    .frame(width: 54, height: 54) // smaller circles
+                DogAvatar(dog: dog, showCheck: false, isUploading: .constant(false))
+                    .frame(width: 54, height: 54)
                     .overlay(Circle().stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2))
-                    .contentShape(Circle()) // full hit area
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .disabled(disabled)
@@ -472,11 +540,11 @@ struct EditProfileView: View {
                 ZStack {
                     Circle().stroke(disabled ? Color.gray : Color.blue, lineWidth: 2)
                     Image(systemName: "plus")
-                        .font(.title3.bold()) // slightly smaller icon
+                        .font(.title3.bold())
                         .foregroundColor(disabled ? .gray : .blue)
                 }
-                .frame(width: 54, height: 54)     // matches dog circles
-                .contentShape(Circle())           // full hit area
+                .frame(width: 54, height: 54)
+                .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .disabled(disabled)
@@ -490,6 +558,10 @@ struct EditProfileView: View {
         @Binding var isEditing: Bool
         @Binding var selectedBreedName: String
 
+        @Binding var isUploading: Bool
+        @Binding var uploadError: String?
+        @Binding var uploadedUrl: String?
+
         var onTapAvatar: () -> Void
         var onSave: (DogCardModel) -> Void
         var onCancel: () -> Void
@@ -501,7 +573,7 @@ struct EditProfileView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
                     Button { if isEditing { onTapAvatar() } } label: {
-                        DogAvatar(dog: working)
+                        DogAvatar(dog: working, showCheck: uploadedUrl != nil, isUploading: $isUploading)
                             .frame(width: 64, height: 64)
                             .overlay(isEditing ? Circle().stroke(Color.blue, lineWidth: 2) : nil)
                     }
@@ -516,6 +588,10 @@ struct EditProfileView: View {
                         Text(working.name).font(.title3.bold())
                     }
                     Spacer()
+                }
+
+                if let err = uploadError {
+                    Text(err).font(.footnote).foregroundColor(.red)
                 }
 
                 if isEditing {
@@ -558,14 +634,14 @@ struct EditProfileView: View {
                                 working.breed = b
                             }
                             onSave(working)
-                            isEditing = false
+                            // isEditing toggled in parent after successful save
                         } else {
                             isEditing = true
                         }
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(isEditing ? .green : .blue)
-                    .disabled(working.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(working.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isUploading)
 
                     if isEditing {
                         Button("Cancel") { onCancel() }
@@ -589,38 +665,37 @@ struct EditProfileView: View {
         }
     }
 
-        private struct BinaryRow: View {
-            let title: String
-            let left: String
-            let right: String
-            @Binding var value: Bool
-            let enabled: Bool
-            var body: some View {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(title).bold()
-                    HStack(spacing: 8) {
-                        Seg(text: left,  selected: value,  enabled: enabled) { if enabled { value = true } }
-                        Seg(text: right, selected: !value, enabled: enabled) { if enabled { value = false } }
-                    }
+    private struct BinaryRow: View {
+        let title: String
+        let left: String
+        let right: String
+        @Binding var value: Bool
+        let enabled: Bool
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title).bold()
+                HStack(spacing: 8) {
+                    Seg(text: left,  selected: value,  enabled: enabled) { if enabled { value = true } }
+                    Seg(text: right, selected: !value, enabled: enabled) { if enabled { value = false } }
                 }
             }
-            private struct Seg: View {
-                let text: String
-                let selected: Bool
-                let enabled: Bool
-                let action: () -> Void
-                var body: some View {
-                    Button(action: action) {
-                        Text(text).font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity).padding(.vertical, 8)
-                            .background(selected ? Color.white : Color.gray.opacity(0.2))
-                            .foregroundColor(.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .opacity(enabled ? 1 : 0.5)
-                    .disabled(!enabled)
+        }
+        private struct Seg: View {
+            let text: String
+            let selected: Bool
+            let enabled: Bool
+            let action: () -> Void
+            var body: some View {
+                Button(action: action) {
+                    Text(text).font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                        .background(selected ? Color.white : Color.gray.opacity(0.2))
+                        .foregroundColor(.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
+                .buttonStyle(.plain)
+                .opacity(enabled ? 1 : 0.5)
+                .disabled(!enabled)
             }
         }
     }
@@ -629,13 +704,55 @@ struct EditProfileView: View {
 
     private struct DogAvatar: View {
         let dog: DogCardModel
+        var showCheck: Bool
+        @Binding var isUploading: Bool
+
+        init(dog: DogCardModel, showCheck: Bool, isUploading: Binding<Bool>) {
+            self.dog = dog
+            self.showCheck = showCheck
+            self._isUploading = isUploading
+        }
+
         var body: some View {
             ZStack {
                 Circle().fill(Color(.secondarySystemBackground))
+
+                // Display order: local image (fresh pick) → remote URL → placeholder
                 if let img = dog.localImage {
                     Image(uiImage: img).resizable().scaledToFill()
+                } else if let urlStr = dog.remoteImageURL, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView()
+                        case .success(let image):
+                            image.resizable().scaledToFill()
+                        case .failure:
+                            Image(systemName: "pawprint.fill").font(.largeTitle)
+                        @unknown default:
+                            Image(systemName: "pawprint.fill").font(.largeTitle)
+                        }
+                    }
                 } else {
                     Image(systemName: "pawprint.fill").font(.largeTitle)
+                }
+
+                if isUploading {
+                    Circle()
+                        .fill(Color.black.opacity(0.35))
+                        .overlay(ProgressView().controlSize(.small))
+                } else if showCheck {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Image(systemName: "checkmark.circle.fill")
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .green)
+                                .background(Circle().fill(Color.green).frame(width: 18, height: 18).opacity(0.001))
+                                .padding(4)
+                        }
+                    }
                 }
             }
             .clipShape(Circle())
@@ -643,4 +760,4 @@ struct EditProfileView: View {
             .shadow(radius: 2)
         }
     }
-
+}

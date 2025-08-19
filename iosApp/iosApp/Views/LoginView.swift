@@ -31,21 +31,25 @@ struct LoginView: View {
         Bundle.main.object(forInfoDictionaryKey: "GOOGLE_PLACES_API_KEY") as? String ?? ""
     }
 
+    // Build the tabs destination with concrete VMs (no placeholders)
+    @ViewBuilder
+    private func makeTabsRoot() -> some View {
+        // Share a single repo instance across VMs
+        let repo = RemoteFirebaseRepository()
+        let dogsVM = DogsViewModel(firebaseRepo: repo)
+        let gardensVM = DogGardensViewModel(
+            firebaseRepo: repo,
+            gardensRepo: GoogleGardensRepository(client: httpClient(), apiKey: placesKey),
+            defaultLanguage: "he"
+        )
+        TabsRootView(dogsVM: dogsVM, gardensVM: gardensVM, userVM: loginViewModel)
+    }
+
     var body: some View {
         ZStack {
             // Hidden link to TabsRootView after successful sign-in
-            NavigationLink(
-                destination: TabsRootView(
-                    dogsVM: DogsViewModel(firebaseRepo: RemoteFirebaseRepository()),
-                    gardensVM: DogGardensViewModel(
-                        firebaseRepo: RemoteFirebaseRepository(),
-                        gardensRepo: GoogleGardensRepository(client: httpClient(), apiKey: placesKey),
-                        defaultLanguage: "he"
-                    )
-                ),
-                isActive: $goToGarden
-            ) { EmptyView() }
-            .hidden()
+            NavigationLink(destination: makeTabsRoot(), isActive: $goToGarden) { EmptyView() }
+                .hidden()
 
             // Background
             LinearGradient(

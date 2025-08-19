@@ -2,11 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CLOUDINARY_CLOUD_NAME</key>
+	<string>dlqydpa1y</string>
+	<key>CLOUDINARY_UPLOAD_PRESET</key>
+	<string>pupfiesta_unsigned</string>
+	<key>CLOUDINARY_FOLDER</key>
+	<string>pupfiesta/dogs</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>We use your location to show nearby dog parks.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>GOOGLE_PLACES_API_KEY</key>
-	<string>$(GOOGLE_PLACES_API_KEY)</string>
+	<string>AIzaSyC3aJ4KSuekabK-4lupb1pfYis3YnZLwxQ</string>
 </dict>
 </plist>
