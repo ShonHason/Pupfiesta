@@ -18,6 +18,8 @@ import org.example.project.data.firebase.RemoteFirebaseRepository
 import org.example.project.data.dogGardens.GardensRepository
 import org.example.project.data.dogGardens.GoogleGardensRepository
 import org.example.project.data.dogGardens.DogGardensViewModel
+import org.example.project.features.postAuth.postAuthModule
+import org.example.project.features.registration.UserViewModel
 
 fun initKoin(config: KoinAppDeclaration? = null) {
     org.koin.core.context.startKoin {
@@ -27,12 +29,14 @@ fun initKoin(config: KoinAppDeclaration? = null) {
 }
 fun initKoin() = initKoin { }
 
-fun appModules() = listOf(commonModule, platformModule, domainModule, presentationModule)
+fun appModules() = listOf(commonModule, platformModule, domainModule, presentationModule,
+    postAuthModule
+)
 
 val domainModule = module {
 //    // Domain: bind interfaces to implementations
-//    singleOf(::RemoteFirebaseRepository) bind FirebaseRepository::class
-//    singleOf(::GoogleGardensRepository) bind GardensRepository::class
+ //   singleOf(::RemoteFirebaseRepository) bind FirebaseRepository::class
+   // singleOf(::GoogleGardensRepository) bind GardensRepository::class
 }
 // Each platform will provide this (engine + API key)
 expect val platformModule: Module
@@ -62,6 +66,11 @@ val presentationModule = module {
             firebaseRepo = get(),
             gardensRepo = get(),
             defaultLanguage = "he"
+        )
+    }
+    single {
+       UserViewModel(
+            firebaseRepo = get()
         )
     }
 }
