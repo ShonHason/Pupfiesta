@@ -96,7 +96,7 @@ class UserViewModel(
             UserEvent.ResetState           -> resetState()
             UserEvent.OnSignUp             -> validateAndSubmitForm()
             is UserEvent.OnSignIn -> userSignIn()
-            is UserEvent.DogPictureUrlChanged -> TODO()
+            is UserEvent.DogPictureUrlChanged -> updateState { copy(dogPictureUrl = event.url) }
         }
     }
 
@@ -238,6 +238,8 @@ class UserViewModel(
                 password = data.password,
                 name     = data.ownerName,
                 dogs     = listOf(dogDto)
+
+
             )) {
                 is Result.Success ->
                     _userState.value = UserState.Loaded

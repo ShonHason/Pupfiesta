@@ -5,12 +5,14 @@ import SwiftUI
 import MapKit
 import Shared
 
+// Lightweight item for annotations
 private struct GardenAnnotationItem: Identifiable {
     let id: String
     let name: String
     let coordinate: CLLocationCoordinate2D
 }
 
+/// Wrapper view used everywhere in the app
 struct MapContainer: View {
     @Binding var region: MKCoordinateRegion
     @Binding var camera: MapCameraPosition
@@ -19,67 +21,19 @@ struct MapContainer: View {
     let gardens: [DogGarden]
     let onSelect: (DogGarden) -> Void
 
-    // map DogGarden -> lightweight annotation items
-    private func makeItems(_ gs: [DogGarden]) -> [GardenAnnotationItem] {
-        var out: [GardenAnnotationItem] = []
-        out.reserveCapacity(gs.count)
-        for g in gs {
-            out.append(
-                GardenAnnotationItem(
-                    id: g.id,
-                    name: g.name,
-                    coordinate: CLLocationCoordinate2D(
-                        latitude: g.location.latitude,
-                        longitude: g.location.longitude
-                    )
-                )
-            )
-        }
-        return out
-    }
-
     var body: some View {
         Group {
             if #available(iOS 17.0, *) {
-                let items = makeItems(gardens)
-                let circleCenter = userCoord ?? region.center
-                let ringCoords = circlePolyline(center: circleCenter, radius: CLLocationDistance(radiusMeters))
-
-                Map(position: $camera, interactionModes: .all) {
-                    // Blue dot
-                    UserAnnotation()
-
-                    // ---- RADIUS RING (no fill) ----
-                    MapPolyline(coordinates: ringCoords)
-                        .stroke(Color.gray.opacity(0.85), lineWidth: 2) // 85% gray
-
-                    // Custom, tappable pins
-                    ForEach(items) { item in
-                        Annotation(item.name, coordinate: item.coordinate, anchor: .bottom) {
-                            Button {
-                                if let g = gardens.first(where: { $0.id == item.id }) {
-                                    onSelect(g)
-                                }
-                            } label: {
-                                PawPinView()
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .annotationTitles(.hidden)
-                    }
-                }
-                .mapControls {
-                    MapUserLocationButton()
-                    MapCompass()
-                }
-                .onAppear { camera = .region(region) }
-                .onChange(of: region.center.latitude)  { _ in camera = .region(region) }
-                .onChange(of: region.center.longitude) { _ in camera = .region(region) }
-                .onChange(of: region.span.latitudeDelta)  { _ in camera = .region(region) }
-                .onChange(of: region.span.longitudeDelta) { _ in camera = .region(region) }
-
+                Map17Wrapper(
+                    region: $region,
+                    camera: $camera,
+                    userCoord: userCoord,
+                    radiusMeters: radiusMeters,
+                    gardens: gardens,
+                    onSelect: onSelect
+                )
             } else {
-                // iOS 13–16 fallback
+                // iOS 13–16: MKMapView path that updates pins in place
                 LegacyRadiusMap(
                     region: $region,
                     center: userCoord ?? region.center,
@@ -92,36 +46,136 @@ struct MapContainer: View {
             }
         }
     }
+}
 
-    // MARK: - Helpers (iOS 17+)
-    /// Build a ring as a polyline so there is never a filled area (works around iOS 18.5 black-fill bug).
-    @available(iOS 17.0, *)
-    private func circlePolyline(center: CLLocationCoordinate2D, radius: CLLocationDistance, segments: Int = 180) -> [CLLocationCoordinate2D] {
-        guard segments > 2 else { return [center] }
-        let R = 6_371_000.0 // Earth radius (m)
-        let lat1 = center.latitude * .pi / 180
-        let lon1 = center.longitude * .pi / 180
-        let angularDistance = radius / R
+@available(iOS 17.0, *)
+private struct Map17Wrapper: View {
+    @Binding var region: MKCoordinateRegion
+    @Binding var camera: MapCameraPosition
 
-        var coords: [CLLocationCoordinate2D] = []
-        coords.reserveCapacity(segments + 1)
+    // Precomputed data (keeps ViewBuilder light)
+    private let circleCenter: CLLocationCoordinate2D
+    private let ringCoords: [CLLocationCoordinate2D]
+    private let items: [GardenAnnotationItem]
+    private let gardens: [DogGarden]
+    private let onSelect: (DogGarden) -> Void
 
-        for i in 0...segments {
-            let bearing = (Double(i) / Double(segments)) * 2.0 * .pi
-            let sinLat1 = sin(lat1), cosLat1 = cos(lat1)
-            let sinAd = sin(angularDistance), cosAd = cos(angularDistance)
+    init(region: Binding<MKCoordinateRegion>,
+         camera: Binding<MapCameraPosition>,
+         userCoord: CLLocationCoordinate2D?,
+         radiusMeters: Int32,
+         gardens: [DogGarden],
+         onSelect: @escaping (DogGarden) -> Void) {
+        self._region = region
+        self._camera = camera
+        self.gardens = gardens
+        self.onSelect = onSelect
 
-            let sinLat2 = sinLat1 * cosAd + cosLat1 * sinAd * cos(bearing)
-            let lat2 = asin(sinLat2)
-            let y = sin(bearing) * sinAd * cosLat1
-            let x = cosAd - sinLat1 * sinLat2
-            let lon2 = lon1 + atan2(y, x)
+        // Use current center (do NOT recenter just because radius changed)
+        let center = userCoord ?? region.wrappedValue.center
+        self.circleCenter = center
 
-            coords.append(CLLocationCoordinate2D(latitude: lat2 * 180 / .pi,
-                                                 longitude: lon2 * 180 / .pi))
+        // Annotation items
+        var tmpItems: [GardenAnnotationItem] = []
+        tmpItems.reserveCapacity(gardens.count)
+        for g in gardens {
+            tmpItems.append(
+                GardenAnnotationItem(
+                    id: g.id,
+                    name: g.name,
+                    coordinate: CLLocationCoordinate2D(
+                        latitude: g.location.latitude,
+                        longitude: g.location.longitude
+                    )
+                )
+            )
         }
-        return coords
+        self.items = tmpItems
+
+        // Stroke-only radius ring
+        self.ringCoords = circlePolylineCoords(center: center, radius: CLLocationDistance(radiusMeters))
+
+        platformLogger(
+            tag: "PUP",
+            message: "MapContainer(iOS17) render pins=\(tmpItems.count) radius=\(radiusMeters) center=(\(center.latitude), \(center.longitude))"
+        )
     }
+
+    var body: some View {
+        Map(position: $camera, interactionModes: .all) {
+            // User dot
+            UserAnnotation()
+
+            // Radius ring (no fill)
+            MapPolyline(coordinates: ringCoords)
+                .stroke(Color.gray.opacity(0.85), lineWidth: 2)
+
+            // Pins – keep builder tiny, no anchor arg
+            ForEach(items) { item in
+                Annotation(item.name, coordinate: item.coordinate) {
+                    PinButton(id: item.id, gardens: gardens, onSelect: onSelect)
+                }
+            }
+        }
+        .mapControls {
+            MapUserLocationButton()
+            MapCompass()
+        }
+        // Keep camera synced with region (no remounts)
+        .onAppear { camera = .region(region) }
+        .onChange(of: region.center.latitude)  { _ in camera = .region(region) }
+        .onChange(of: region.center.longitude) { _ in camera = .region(region) }
+        .onChange(of: region.span.latitudeDelta)  { _ in camera = .region(region) }
+        .onChange(of: region.span.longitudeDelta) { _ in camera = .region(region) }
+    }
+}
+
+@available(iOS 17.0, *)
+private struct PinButton: View {
+    let id: String
+    let gardens: [DogGarden]
+    let onSelect: (DogGarden) -> Void
+
+    var body: some View {
+        Button {
+            if let g = gardens.first(where: { $0.id == id }) { onSelect(g) }
+        } label: {
+            PawPinView()
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Helpers
+
+@available(iOS 17.0, *)
+private func circlePolylineCoords(center: CLLocationCoordinate2D,
+                                  radius: CLLocationDistance,
+                                  segments: Int = 180) -> [CLLocationCoordinate2D] {
+    guard segments > 2 else { return [center] }
+    let R = 6_371_000.0 // Earth radius (m)
+    let lat1 = center.latitude * .pi / 180
+    let lon1 = center.longitude * .pi / 180
+    let angularDistance = radius / R
+
+    var coords: [CLLocationCoordinate2D] = []
+    coords.reserveCapacity(segments + 1)
+
+    for i in 0...segments {
+        let bearing = (Double(i) / Double(segments)) * 2.0 * .pi
+        let sinLat1 = sin(lat1), cosLat1 = cos(lat1)
+        let sinAd = sin(angularDistance), cosAd = cos(angularDistance)
+
+        let sinLat2 = sinLat1 * cosAd + cosLat1 * sinAd * cos(bearing)
+        let lat2 = asin(sinLat2)
+        let y = sin(bearing) * sinAd * cosLat1
+        let x = cosAd - sinLat1 * sinLat2
+        let lon2 = lon1 + atan2(y, x)
+
+        coords.append(CLLocationCoordinate2D(latitude: lat2 * 180 / .pi,
+                                             longitude: lon2 * 180 / .pi))
+    }
+    return coords
 }
 
 // MARK: - Custom Pin
