@@ -29,4 +29,7 @@ interface FirebaseRepository {
     fun listenGardenPresence(gardenId: String): Flow<List<DogDto>>
     suspend fun checkInDogs(gardenId: String, dogs: List<DogDto>): Result<Unit, AuthError>
     suspend fun checkOutDogs(gardenId: String, dogIds: List<String>): Result<Unit, AuthError>
+    suspend fun upsertDogGardensCore(items: List<DogGarden>):
+          Result<Unit, AuthError>
+
 }

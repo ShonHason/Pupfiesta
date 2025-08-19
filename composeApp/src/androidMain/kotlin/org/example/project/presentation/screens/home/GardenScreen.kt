@@ -29,6 +29,9 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import kotlinx.coroutines.launch
 import org.example.project.data.dogGardens.DogGardensViewModel
+import org.example.project.data.remote.dto.DogDto
+import org.example.project.domain.models.DogBrief
+import org.example.project.enum.Gender
 import org.example.project.features.registration.UserViewModel
 import org.example.project.presentation.screens.HomeTab
 import org.example.project.utils.Location
@@ -37,6 +40,17 @@ import org.example.project.utils.Location
 private val thirtySixDp = 36.dp
 private val fortyEightDp = 48.dp
 
+// --- DogBrief mapping (DogDto -> DogBrief) ---
+private fun DogDto.toDogBrief(): DogBrief =
+    DogBrief(
+        id = id,
+        dogName = name,
+        dogGender = if (isMale) Gender.MALE else Gender.FEMALE,
+        isFriendly = isFriendly,
+        isNeutered = isNeutered,
+        dogPictureUrl = dogPictureUrl // << use your field name
+    )
+
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun GardenScreen(
@@ -44,7 +58,8 @@ fun GardenScreen(
     onBack: () -> Unit,
     onScan: () -> Unit, // kept for compatibility
     onGoProfile: () -> Unit,
-    userViewModel: UserViewModel
+    userViewModel: UserViewModel,
+    onLogout: () -> Unit
 ) {
     // Permissions (delegated effect)
     val fine = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -87,8 +102,16 @@ fun GardenScreen(
                         label = { Text(tab.label) },
                         selected = (tab == selectedTab),
                         onClick = {
-                            selectedTab = tab
-                            if (tab == HomeTab.Profile) onGoProfile()
+                            when (tab) {
+                                HomeTab.Logout -> onLogout()
+                                HomeTab.Profile -> {
+                                    selectedTab = tab
+                                    onGoProfile()
+                                }
+                                else -> {
+                                    selectedTab = tab
+                                }
+                            }
                         }
                     )
                 }
@@ -296,6 +319,9 @@ private fun GardenBottomSheetHost(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val uiScope = rememberCoroutineScope()
 
+    // NEW: selected dog brief to show in a dialog
+    var selectedDogBrief by remember { mutableStateOf<DogBrief?>(null) }
+
     // Start/stop presence + load photo when garden changes
     LaunchedEffect(selectedGarden.id) {
         viewModel.loadGardenPhoto(selectedGarden.id, 900)
@@ -315,15 +341,22 @@ private fun GardenBottomSheetHost(
             presentDogs = presentDogs,
             mySelectedDogs = myDogs,
             onCheckIn = {
-                uiScope.launch {
-                    viewModel.checkInDogs(selectedGarden.id, myDogs)
-                }
+                uiScope.launch { viewModel.checkInDogs(selectedGarden.id, myDogs) }
             },
             onCheckOut = {
-                uiScope.launch {
-                    viewModel.checkOutDogs(selectedGarden.id, myDogs.map { it.id })
-                }
+                uiScope.launch { viewModel.checkOutDogs(selectedGarden.id, myDogs.map { it.id }) }
+            },
+            onDogClick = { dogDto ->
+                selectedDogBrief = dogDto.toDogBrief()
             }
+        )
+    }
+
+    // Dog details dialog
+    selectedDogBrief?.let { brief ->
+        DogDetailsDialog(
+            dog = brief,
+            onDismiss = { selectedDogBrief = null }
         )
     }
 }
@@ -388,7 +421,8 @@ private fun GardenInfoSheet(
     presentDogs: List<org.example.project.data.remote.dto.DogDto>,
     mySelectedDogs: List<org.example.project.data.remote.dto.DogDto>,
     onCheckIn: () -> Unit,
-    onCheckOut: () -> Unit
+    onCheckOut: () -> Unit,
+    onDogClick: (org.example.project.data.remote.dto.DogDto) -> Unit, // << FIXED type
 ) {
     Column(
         Modifier
@@ -432,7 +466,10 @@ private fun GardenInfoSheet(
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(presentDogs, key = { it.id }) { dog ->
-                    DogRowCompact(dog)
+                    DogRowCompact(
+                        dog = dog,
+                        onClick = { onDogClick(dog) } // << make row tappable
+                    )
                 }
             }
         }
@@ -458,10 +495,14 @@ private fun GardenInfoSheet(
 }
 
 @Composable
-private fun DogRowCompact(dog: org.example.project.data.remote.dto.DogDto) {
+private fun DogRowCompact(
+    dog: org.example.project.data.remote.dto.DogDto,
+    onClick: () -> Unit
+) {
     Row(
         Modifier
             .fillMaxWidth()
+            .clickable { onClick() } // << clickable row
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -471,9 +512,10 @@ private fun DogRowCompact(dog: org.example.project.data.remote.dto.DogDto) {
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
-            if (dog.photoUrl.isNotBlank()) {
+            val picture = dog.dogPictureUrl // << use your field name
+            if (picture.isNotBlank()) {
                 SubcomposeAsyncImage(
-                    model = dog.photoUrl,
+                    model = picture,
                     contentDescription = dog.name,
                     contentScale = ContentScale.Crop,
                     loading = {
@@ -565,9 +607,10 @@ private fun DogSelectRow(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
-            if (dog.photoUrl.isNotBlank()) {
+            val picture = dog.dogPictureUrl // << use your field name
+            if (picture.isNotBlank()) {
                 SubcomposeAsyncImage(
-                    model = dog.photoUrl,
+                    model = picture,
                     contentDescription = dog.name,
                     contentScale = ContentScale.Crop,
                     loading = {
@@ -590,3 +633,56 @@ private fun DogSelectRow(
     }
 }
 
+/* ---------- NEW: Dog details dialog ---------- */
+
+@Composable
+private fun DogDetailsDialog(
+    dog: DogBrief,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text(dog.dogName.ifBlank { "Dog" }) },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                if (dog.dogPictureUrl.isNotBlank()) {
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.dp)
+                    ) {
+                        SubcomposeAsyncImage(
+                            model = dog.dogPictureUrl,
+                            contentDescription = dog.dogName,
+                            contentScale = ContentScale.Crop,
+                            loading = {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(strokeWidth = 2.dp)
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+                InfoRow("Gender", dog.dogGender?.name ?: "Unknown")
+                InfoRow("Friendly", dog.isFriendly?.let { if (it) "Yes" else "No" } ?: "Unknown")
+                InfoRow("Neutered", dog.isNeutered?.let { if (it) "Yes" else "No" } ?: "Unknown")
+            }
+        }
+    )
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}

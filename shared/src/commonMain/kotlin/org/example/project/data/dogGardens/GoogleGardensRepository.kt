@@ -34,21 +34,22 @@ class GoogleGardensRepository(
             }
         }
 
-        val clamped = radiusMeters.coerceIn(1, 50_000) // Places max
+        // Google Nearby Search: rankby=distance requires NOT using radius; provide type/keyword.
         val resp: NearbySearchResponse = http.get(BASE) {
             parameter("location", "$latitude,$longitude")
-            parameter("radius", clamped)                 // ✅ use requested radius
-            parameter("type", "park")                    // optional: tighten to parks
-            parameter("keyword", "dog")                  // optional: bias toward dog parks
+            parameter("rankby", "distance")
+            parameter("type", "park")
+            parameter("keyword", "גינת כלבים")
             parameter("language", language)
             parameter("key", apiKey)
         }.body()
 
-        return resp.results.mapNotNull { r ->
+        // Map API results to domain model
+        val raw = resp.results.mapNotNull { r ->
             val lat = r.geometry?.location?.lat ?: return@mapNotNull null
             val lng = r.geometry?.location?.lng ?: return@mapNotNull null
-            val placeId = r.place_id ?: "$lat,$lng"
-            val name = r.name?.trim() ?: return@mapNotNull null
+            val placeId = r.place_id ?: return@mapNotNull null
+            val name = r.name?.trim() ?: "גינת כלבים"
 
             DogGarden(
                 id = placeId,
@@ -56,6 +57,24 @@ class GoogleGardensRepository(
                 mapUrl = "https://www.google.com/maps/place/?q=place_id:$placeId",
                 location = org.example.project.domain.models.Location(lat, lng)
             )
+        }
+
+        // Client-side distance filter so changing the radius in the UI updates the map
+        val maxDist = radiusMeters.coerceAtLeast(1)
+        fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Int {
+            val R = 6_371_000.0
+            fun Double.rad() = this * kotlin.math.PI / 180.0
+            val dLat = (lat2 - lat1).rad()
+            val dLon = (lon2 - lon1).rad()
+            val a = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
+                    kotlin.math.cos(lat1.rad()) * kotlin.math.cos(lat2.rad()) *
+                    kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
+            val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+            return (R * c).toInt()
+        }
+
+        return raw.filter { g ->
+            haversineMeters(latitude, longitude, g.location.latitude, g.location.longitude) <= maxDist
         }
     }
 

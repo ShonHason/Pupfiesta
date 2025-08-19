@@ -15,6 +15,9 @@ import org.example.project.platformLogger
 import org.example.project.utils.Location
 import org.example.project.utils.getLocation
 
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withTimeoutOrNull
+
 import kotlin.math.pow
 
 import org.example.project.domain.models.Location as ModelLocation
@@ -262,3 +265,4 @@ class DogGardensViewModel(
     private suspend fun getLocationOrNull(timeoutMs: Long): Location? =
         runCatching { withTimeoutOrNull(timeoutMs) { getLocation() } }.getOrNull()
 }
+

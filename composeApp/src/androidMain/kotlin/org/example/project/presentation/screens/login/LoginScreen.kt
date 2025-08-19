@@ -1,7 +1,7 @@
 // file: LoginScreen.kt
 package org.example.project.presentation.screens.login
 
-import androidx.compose.foundation.Image
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,7 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -48,21 +48,16 @@ fun LoginScreen(
     onBack: () -> Unit,
     onRecoverPassword: () -> Unit = {},
     onSignIn: () -> Unit = {},
-    onGoogle: () -> Unit = {},
-    onApple: () -> Unit = {},
     onRegister: () -> Unit = {}
 ) {
-    // 1️⃣ Collect your view-model state
     val loginState by viewModel.userState.collectAsState()
 
-    // 2️⃣ When it becomes Loaded, navigate home
     LaunchedEffect(loginState) {
         if (loginState is UserState.Loaded) {
             onSignIn()
         }
     }
 
-    // 3️⃣ Local UI state for showing/hiding password
     var passwordVisible by remember { mutableStateOf(false) }
 
     Box(
@@ -90,7 +85,6 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(40.dp))
 
-            // 4️⃣ Pull the latest form data from your state
             val data = (loginState as? UserState.Initial)?.data ?: UserFormData()
 
             OutlinedTextField(
@@ -151,7 +145,6 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(32.dp))
 
-            // 5️⃣ Show loading Lottie over the button when state is Loading
             Box {
                 Button(
                     onClick = { viewModel.onEvent(UserEvent.OnSignIn) },
@@ -185,47 +178,12 @@ fun LoginScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // 6️⃣ Error message
             if (loginState is UserState.Error) {
                 Text(
                     text = (loginState as UserState.Error).message,
                     color = Color.Red,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
-            }
-
-            Spacer(Modifier.height(16.dp))
-            Text("Or continue with", color = Color.Gray, fontSize = 14.sp)
-            Spacer(Modifier.height(16.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onGoogle,
-                    modifier = Modifier.size(width = 140.dp, height = 48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_google),
-                        contentDescription = "Google",
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                OutlinedButton(
-                    onClick = onApple,
-                    modifier = Modifier.size(width = 140.dp, height = 48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_apple),
-                        contentDescription = "Apple",
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
             }
 
             Spacer(Modifier.height(40.dp))
@@ -235,7 +193,7 @@ fun LoginScreen(
                         append("if you don’t have an account you can ")
                     }
                     withStyle(SpanStyle(color = Color(0xFF3B5BFF), fontWeight = FontWeight.Bold)) {
-                        append("Register here!")
+                        append("Register here")
                     }
                 },
                 modifier = Modifier.clickable(onClick = onRegister),
