@@ -45,6 +45,12 @@ struct MapContainer: View {
                 )
             }
         }
+        // Your ZoomControls overlay (works on all iOS versions)
+        .overlay(alignment: .bottomTrailing) {
+            ZoomControls(region: $region)
+                .padding(.trailing, 12)
+                .padding(.bottom, 12)
+        }
     }
 }
 

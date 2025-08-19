@@ -55,13 +55,11 @@ struct GardenTopSheet: View {
                 .accessibilityLabel("Close")
             }
 
-            // Dogs row (button for reliable taps in a horizontal scroll)
+            // Dogs row
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(presentDogs, id: \.id) { d in
-                        Button {
-                            onDogTap(d)
-                        } label: {
+                        Button { onDogTap(d) } label: {
                             GardenDogChip(dog: d, showLabel: tooltipDogId == d.id)
                         }
                         .buttonStyle(.plain)
@@ -77,7 +75,7 @@ struct GardenTopSheet: View {
                 .padding(.vertical, 2)
             }
 
-            // Reason line (if check-in is disabled)
+            // Reason (if disabled)
             if let reason = disabledReason, !isCheckedIn, !canCheckIn {
                 Text(reason)
                     .font(.caption2)
@@ -214,14 +212,13 @@ public struct GardenDogAvatar: View {
     }
 }
 
-// MARK: - Tiny, elegant card for dog details (modern)
+// MARK: - Tiny dog details card (optional use elsewhere)
 public struct DogQuickCard: View {
     let dog: DogDto
     @Environment(\.dismiss) private var dismiss
 
     public init(dog: DogDto) { self.dog = dog }
 
-    // Subtle accent based on friendliness / gender
     private var accentGradient: LinearGradient {
         let colors: [Color]
         if dog.isFriendly {
@@ -236,7 +233,6 @@ public struct DogQuickCard: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Tiny grabber so the sheet feels native even if drag indicator is hidden
             Capsule()
                 .fill(Color.primary.opacity(0.15))
                 .frame(width: 28, height: 4)
@@ -244,7 +240,6 @@ public struct DogQuickCard: View {
                 .padding(.bottom, 8)
 
             VStack(spacing: 12) {
-                // Header
                 HStack(spacing: 12) {
                     RingAvatar(urlString: dog.dogPictureUrl, size: 56, ringWidth: 2, gradient: accentGradient)
                     VStack(alignment: .leading, spacing: 2) {
@@ -257,9 +252,7 @@ public struct DogQuickCard: View {
                             .lineLimit(1)
                     }
                     Spacer()
-                    Button {
-                        dismiss()
-                    } label: {
+                    Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill").font(.title3)
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(.secondary)
@@ -268,16 +261,14 @@ public struct DogQuickCard: View {
                     .accessibilityLabel("Close")
                 }
 
-                // Chips
                 HStack(spacing: 8) {
                     InfoChip(icon: "scalemass", text: "\(Int(dog.weight)) kg")
                     InfoChip(icon: dog.isMale ? "person.fill" : "person", text: dog.isMale ? "Male" : "Female")
-                    InfoChip(icon: dog.isNeutered ? "scissors" : "scissors", text: dog.isNeutered ? "Neutered" : "—")
+                    InfoChip(icon: "scissors", text: dog.isNeutered ? "Neutered" : "—")
                     InfoChip(icon: dog.isFriendly ? "hand.thumbsup.fill" : "hand.thumbsup", text: dog.isFriendly ? "Friendly" : "Shy")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Soft divider
                 Rectangle()
                     .fill(Color.primary.opacity(0.08))
                     .frame(height: 1)
@@ -286,7 +277,6 @@ public struct DogQuickCard: View {
                             .mask(Rectangle().frame(height: 1))
                     )
 
-                // Mini bio line (optional feel-good touch)
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles")
                         .imageScale(.small)
@@ -303,7 +293,6 @@ public struct DogQuickCard: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        // Chic gradient hairline
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .stroke(accentGradient.opacity(0.45), lineWidth: 0.8)
                     )
@@ -322,8 +311,6 @@ public struct DogQuickCard: View {
         return "\(sex), \(neuter), \(Int(d.weight))kg • very \(mood)"
     }
 }
-
-// MARK: - Pieces
 
 private struct RingAvatar: View {
     let urlString: String
@@ -378,65 +365,5 @@ private struct InfoChip: View {
             Capsule(style: .continuous)
                 .stroke(Color.white.opacity(0.45), lineWidth: 0.6)
         )
-    }
-}
-
-    private struct InfoPill: View {
-        let icon: String
-        let text: String
-        var body: some View {
-            HStack(spacing: 4) {
-                Image(systemName: icon).imageScale(.small)
-                Text(text).font(.caption2)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.thinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 0.5))
-        }
-    }
-
-
-// MARK: - Dog picker sheet (multi-select)
-public struct DogPickerSheet: View {
-    let allDogs: [DogDto]
-    let initiallySelected: Set<String>
-    let onConfirm: (Set<String>) -> Void
-    let onCancel: () -> Void
-
-    @State private var selected: Set<String> = []
-
-    public init(allDogs: [DogDto], initiallySelected: Set<String>, onConfirm: @escaping (Set<String>) -> Void, onCancel: @escaping () -> Void) {
-        self.allDogs = allDogs
-        self.initiallySelected = initiallySelected
-        self.onConfirm = onConfirm
-        self.onCancel = onCancel
-    }
-
-    public var body: some View {
-        NavigationView {
-            List {
-                ForEach(allDogs, id: \.id) { d in
-                    HStack(spacing: 12) {
-                        GardenDogAvatar(dog: d, diameter: 32)
-                        Text(d.name.isEmpty ? "Dog" : d.name)
-                            .font(.subheadline)
-                        Spacer()
-                        Image(systemName: selected.contains(d.id) ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(selected.contains(d.id) ? .accentColor : .secondary)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if selected.contains(d.id) { selected.remove(d.id) } else { selected.insert(d.id) }
-                    }
-                }
-            }
-            .navigationBarTitle("Select dogs", displayMode: .inline)
-            .navigationBarItems(
-                leading: Button("Cancel", action: onCancel),
-                trailing: Button("Confirm") { onConfirm(selected) }.disabled(allDogs.isEmpty)
-            )
-            .onAppear { selected = initiallySelected }
-        }
     }
 }

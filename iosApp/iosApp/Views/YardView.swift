@@ -124,31 +124,27 @@ struct YardView: View {
         }
         // Dog picker (multi-select)
         .sheet(isPresented: $showDogPicker) {
+            // Get the KMM VM from Koin
+            let dogsVM = ServiceLocator().dogsVM()
+
+            let picker = DogPickerSheet(
+                dogsViewModel: dogsVM,
+                initiallySelected: selectedDogIds,
+                onConfirm: { ids in
+                    selectedDogIds = ids
+                    if let g = selectedGarden { checkInDogs(for: g, ids: ids) }
+                    showDogPicker = false
+                },
+                onCancel: { showDogPicker = false }
+            )
+
             if #available(iOS 16.0, *) {
-                DogPickerSheet(
-                    allDogs: myDogs,
-                    initiallySelected: selectedDogIds,
-                    onConfirm: { ids in
-                        selectedDogIds = ids
-                        if let g = selectedGarden { checkInDogs(for: g, ids: ids) }
-                        showDogPicker = false
-                    },
-                    onCancel: { showDogPicker = false }
-                )
-                .presentationDetents([.medium]) // smaller than large
+                picker.presentationDetents([.medium])
             } else {
-                DogPickerSheet(
-                    allDogs: myDogs,
-                    initiallySelected: selectedDogIds,
-                    onConfirm: { ids in
-                        selectedDogIds = ids
-                        if let g = selectedGarden { checkInDogs(for: g, ids: ids) }
-                        showDogPicker = false
-                    },
-                    onCancel: { showDogPicker = false }
-                )
+                picker
             }
         }
+
         // Small dog info popup (very compact)
         .sheet(isPresented: $showDogCard) {
             if let d = quickDog {

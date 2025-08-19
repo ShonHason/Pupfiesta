@@ -1,187 +1,141 @@
-import SwiftUI
-import Shared
+//
+//  RegisterView.swift
+//  iosApp
+//
 
-struct LoginView: View {
-    // Back
+import SwiftUI
+import PhotosUI
+import Shared
+import Foundation
+
+// MARK: - Kotlin enum helpers
+private func allBreeds() -> [Breed] {
+    let arr = SwiftBridge().allBreeds()
+    var out: [Breed] = []
+    let n = Int(arr.size)
+    out.reserveCapacity(n)
+    for i in 0..<n {
+        if let b = arr.get(index: Int32(i)) as? Breed { out.append(b) }
+    }
+    return out
+}
+private func breedTitle(_ b: Breed) -> String {
+    b.name.lowercased().replacingOccurrences(of: "_", with: " ").capitalized
+}
+
+struct RegisterView: View {
     @Environment(\.dismiss) private var dismiss
 
-    // MARK: — Form State
-    @State private var email        = ""
-    @State private var password     = ""
-    @State private var showPassword = false
+    let viewModel: UserViewModel
+    var onRegistered: () -> Void = {}
 
-    // ViewModels
-    let loginViewModel: UserViewModel
-
-    // VM observation
     @State private var vmState: UserState
-    @State private var observeTask: Task<Void, Never>? = nil
+    @State private var observeTask: Task<Void, Never>?
+
+    // Local UI state
+    @State private var email           = ""
+    @State private var password        = ""
+    @State private var ownerName       = ""
+    @State private var dogName         = ""
+    @State private var selectedBreed: Breed = .mixed
+    @State private var isMale          = true
+    @State private var isNeutered      = true
+    @State private var isFriendly      = true
+    @State private var selectedWeight  = 25
+
+    // Image picking/upload
+    @State private var showImagePicker = false
+    @State private var dogImage: UIImage? = nil
+    @State private var isUploading = false
+    @State private var uploadError: String? = nil
+    @State private var uploadedUrl: String? = nil
+
+    // Errors
     @State private var errorMessage = ""
 
     // Navigation
-    @State private var goToGarden = false   // trigger navigation on success
+    @State private var goPostAuth = false
+    @State private var goToGarden = false
 
-    init(loginViewModel: UserViewModel) {
-        self.loginViewModel = loginViewModel
-        _vmState = State(initialValue: loginViewModel.userState.value)
+    init(viewModel: UserViewModel, onRegistered: @escaping () -> Void = {}) {
+        self.viewModel = viewModel
+        self.onRegistered = onRegistered
+        _vmState = State(initialValue: viewModel.userState.value)
     }
 
-    /// Read Google Places key from Info.plist
     private var placesKey: String {
         Bundle.main.object(forInfoDictionaryKey: "GOOGLE_PLACES_API_KEY") as? String ?? ""
     }
 
-    // Build the tabs destination with concrete VMs (no placeholders)
+    // TabsRoot
     @ViewBuilder
     private func makeTabsRoot() -> some View {
-        // Share a single repo instance across VMs
         let repo = RemoteFirebaseRepository()
-        let dogsVM = DogsViewModel(firebaseRepo: repo)
         let gardensVM = DogGardensViewModel(
             firebaseRepo: repo,
             gardensRepo: GoogleGardensRepository(client: httpClient(), apiKey: placesKey),
             defaultLanguage: "he"
         )
-        TabsRootView(dogsVM: dogsVM, gardensVM: gardensVM, userVM: loginViewModel)
+        let dogsVM = DogsViewModel(firebaseRepo: repo)
+        TabsRootView(dogsVM: dogsVM, gardensVM: gardensVM, userVM: viewModel)
+    }
+
+    // PostAuth
+    @ViewBuilder
+    private func makePostAuth() -> some View {
+        let repo = RemoteFirebaseRepository()
+        let postAuthVM = PostAuthViewModel(
+            gardensRepo: GoogleGardensRepository(client: httpClient(), apiKey: placesKey),
+            firebaseRepo: repo,
+            userViewModel: viewModel,
+            defaultLanguage: "he"
+        )
+        PostAuthView(viewModel: postAuthVM) {
+            goToGarden = true
+        }
     }
 
     var body: some View {
         ZStack {
-            // Hidden link to TabsRootView after successful sign-in
-            NavigationLink(destination: makeTabsRoot(), isActive: $goToGarden) { EmptyView() }
-                .hidden()
+            // Hidden links
+            NavigationLink(destination: makePostAuth(), isActive: $goPostAuth) { EmptyView() }.hidden()
+            NavigationLink(destination: makeTabsRoot(), isActive: $goToGarden) { EmptyView() }.hidden()
 
-            // Background
             LinearGradient(
-                colors: [
-                    Color(red: 252/255, green: 241/255, blue: 196/255),
-                    Color(red: 176/255, green: 212/255, blue: 248/255)
-                ],
+                colors: [Color(red: 252/255, green: 241/255, blue: 196/255),
+                         Color(red: 176/255, green: 212/255, blue: 248/255)],
                 startPoint: .top, endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            ).ignoresSafeArea()
 
-            VStack(spacing: 32) {
-                Spacer(minLength: 40)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 24) {
+                    Text("Let’s Get To Know You!")
+                        .font(.title2).bold().padding(.top, 20)
 
-                Text("PupFiesta")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-
-                // Email
-                ClearableTextField(
-                    placeholder: "Enter Email",
-                    text: $email
-                )
-                .padding(.horizontal, 16)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled(true)
-                .onChange(of: email) { _, newValue in
-                    loginViewModel.setEmail(v: newValue)
+                    fieldsSection
+                    breedRow
+                    genderRow
+                    neuteredRow
+                    friendlyRow
+                    weightAndPhotoSection
+                    signUpButton
+                    stateBanner
+                    Spacer(minLength: 20)
                 }
-
-                // Password + controls
-                ZStack(alignment: .trailing) {
-                    Group {
-                        if showPassword {
-                            TextField("Enter Password", text: $password)
-                        } else {
-                            SecureField("Enter Password", text: $password)
-                        }
-                    }
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled(true)
-                    .padding(12)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(8)
-                    .onChange(of: password) { _, newValue in
-                        loginViewModel.setPassword(v: newValue)
-                    }
-
-                    HStack(spacing: 12) {
-                        Button { showPassword.toggle() } label: {
-                            Image(systemName: showPassword ? "eye.slash" : "eye")
-                                .foregroundColor(.gray)
-                        }
-
-                        NavigationLink("Recover Password?", destination: RecoverPasswordScreen())
-                            .font(.footnote)
-                            .foregroundColor(.gray)
-                    }
-                    .padding(.trailing, 16)
-                }
-                .padding(.horizontal, 16)
-
-                // Sign in
-                Button {
-                    loginViewModel.signIn()
-                } label: {
-                    Text("Sign In")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal, 16)
-
-                // Socials (stubs)
-                Text("Or continue with")
-                    .font(.footnote)
-                    .foregroundColor(.gray)
-
-                HStack(spacing: 32) {
-                    Button { /* Google action */ } label: {
-                        Image("GoogleIcon")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 30, height: 30)
-                            .frame(width: 100, height: 50)
-                            .background(Color.white.opacity(0.8))
-                            .cornerRadius(12)
-                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    }
-
-                    Button { /* Apple action */ } label: {
-                        Image(systemName: "apple.logo")
-                            .resizable()
-                            .scaledToFit()
-                            .foregroundColor(.black)
-                            .frame(width: 30, height: 30)
-                            .frame(width: 100, height: 50)
-                            .background(Color.white.opacity(0.8))
-                            .cornerRadius(12)
-                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    }
-                }
-
-                // Bottom prompt
-                HStack(spacing: 4) {
-                    Text("if you don’t have an account you can")
-                        .font(.footnote)
-                        .foregroundColor(.gray)
-                    NavigationLink(
-                        "Register here!",
-                        destination: RegisterView(
-                            viewModel: loginViewModel,
-                            onRegistered: { goToGarden = true }
-                        )
-                    )
-                    .font(.footnote)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.blue)
-                }
-                .padding(.top, 16)
-
-                Spacer()
+            }
+            .sheet(isPresented: $showImagePicker) { PhotoPicker(image: $dogImage) }
+            .onChange(of: dogImage) { newImage in
+                guard let img = newImage else { return }
+                startCloudinaryUpload(image: img)
             }
         }
-        .navigationTitle("Login")
+        .navigationTitle("Register")
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button(action: { dismiss() }) {
+                Button {
+                    dismiss()
+                } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "chevron.left")
                         Text("Back")
@@ -192,18 +146,19 @@ struct LoginView: View {
         .onAppear {
             observeTask?.cancel()
             observeTask = Task {
-                for await s in loginViewModel.userState {
+                for await s in viewModel.userState {
                     await MainActor.run {
                         vmState = s
-                        if let e = s as? UserState.Error {
-                            errorMessage = e.message
-                        }
+                        if let i = s as? UserState.Initial { syncFromInitial(i) }
                         if s is UserState.Loaded {
-                            goToGarden = true
+                            onRegistered()
+                            goPostAuth = true
                         }
+                        if let e = s as? UserState.Error { errorMessage = e.message }
                     }
                 }
             }
+            if let i = vmState as? UserState.Initial { syncFromInitial(i) }
         }
         .onDisappear { observeTask?.cancel(); observeTask = nil }
         .alert("Error",
@@ -214,13 +169,253 @@ struct LoginView: View {
             Button("OK") { errorMessage = "" }
         } message: { Text(errorMessage) }
     }
-}
 
-// Optional destination
-struct RecoverPasswordScreen: View {
-    var body: some View {
-        Text("🔑 Recover Password")
-            .font(.largeTitle)
-            .navigationTitle("Recover")
+    // MARK: - Sections
+
+    private var fieldsSection: some View {
+        VStack(spacing: 16) {
+            labeledField(title: "Email") {
+                TextField("Enter Email", text: $email)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .keyboardType(.emailAddress)
+                    .onChange(of: email) { viewModel.setEmail(v: $0) }
+            }
+            labeledField(title: "Password") {
+                SecureField("Enter Password", text: $password)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .onChange(of: password) { viewModel.setPassword(v: $0) }
+            }
+            labeledField(title: "Owner’s Name") {
+                TextField("Enter Owner’s Name", text: $ownerName)
+                    .onChange(of: ownerName) { viewModel.setOwnerName(v: $0) }
+            }
+            labeledField(title: "Dog’s Name") {
+                TextField("Enter Dog’s Name", text: $dogName)
+                    .onChange(of: dogName) { viewModel.setDogName(v: $0) }
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private var breedRow: some View {
+        HStack {
+            Text("What is your dog’s breed?")
+                .font(.subheadline).fontWeight(.semibold)
+            Spacer()
+            Menu {
+                ForEach(allBreeds(), id: \.name) { b in
+                    Button(breedTitle(b)) {
+                        selectedBreed = b
+                        viewModel.setDogBreed(breed: b)
+                    }
+                }
+            } label: {
+                Text(breedTitle(selectedBreed))
+                    .font(.subheadline)
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(Color.gray.opacity(0.12))
+                    .cornerRadius(8)
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private var genderRow: some View {
+        HStack {
+            Text("Gender").font(.subheadline).fontWeight(.semibold)
+            Spacer()
+            Button {
+                isMale.toggle()
+                viewModel.setDogGender(gender: isMale ? .male : .female)
+            } label: {
+                Text(isMale ? "Male" : "Female")
+                    .font(.subheadline).fontWeight(.semibold)
+                    .frame(width: 80, height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(isMale ? Color.blue.opacity(0.2) : Color.pink.opacity(0.2))
+                    )
+                    .foregroundColor(isMale ? .blue : .pink)
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private var neuteredRow: some View {
+        HStack {
+            Text("Is The Dog Neutered/Spayed?").font(.subheadline)
+            Spacer()
+            Toggle("", isOn: $isNeutered)
+                .labelsHidden()
+                .onChange(of: isNeutered) { viewModel.setIsNeutered(v: $0) }
+            Text(isNeutered ? "Yes" : "No").font(.subheadline)
+        }
+        .padding(.horizontal)
+    }
+
+    private var friendlyRow: some View {
+        HStack {
+            Text("Is The Dog Friendly?").font(.subheadline)
+            Spacer()
+            Toggle("", isOn: $isFriendly)
+                .labelsHidden()
+                .onChange(of: isFriendly) { viewModel.setIsFriendly(v: $0) }
+            Text(isFriendly ? "Yes" : "No").font(.subheadline)
+        }
+        .padding(.horizontal)
+    }
+
+    private var weightAndPhotoSection: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Dog Weight in Kilograms").font(.subheadline)
+                Picker("", selection: $selectedWeight) {
+                    ForEach(5...50, id: \.self) { w in Text("\(w)").tag(w) }
+                }
+                .pickerStyle(.wheel)
+                .frame(width: 80, height: 80)
+                .onChange(of: selectedWeight) { viewModel.setDogWeight(kg: Int32($0)) }
+
+                Text("\(selectedWeight) kg").font(.subheadline)
+            }
+
+            Spacer()
+
+            VStack(spacing: 6) {
+                Text("Tap To Upload Picture Of Your Dog").font(.subheadline)
+
+                ZStack {
+                    Button { showImagePicker = true } label: {
+                        Group {
+                            if let img = dogImage {
+                                Image(uiImage: img).resizable().scaledToFill()
+                            } else {
+                                Image(systemName: "photo")
+                                    .resizable().scaledToFit()
+                                    .padding(20).opacity(0.35)
+                            }
+                        }
+                        .frame(width: 80, height: 80)
+                        .background(Color.gray.opacity(0.12))
+                        .clipShape(Circle())
+                        .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if isUploading {
+                        ProgressView()
+                            .frame(width: 80, height: 80)
+                            .background(Color.black.opacity(0.25))
+                            .clipShape(Circle())
+                    }
+
+                    if !isUploading, uploadedUrl != nil {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Text("✓").font(.headline).bold().padding(4)
+                            }
+                        }
+                        .frame(width: 80, height: 80)
+                    }
+                }
+
+                if let uploadError {
+                    Text(uploadError)
+                        .font(.footnote)
+                        .foregroundColor(.red)
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private var signUpButton: some View {
+        Button {
+            if isUploading { return }
+            viewModel.signUp()
+        } label: {
+            HStack {
+                if vmState is UserState.Loading { ProgressView().controlSize(.small) }
+                Text(vmState is UserState.Loading ? "Signing Up…" : "Sign Up")
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background((!isUploading && !(vmState is UserState.Loading)) ? Color.blue : Color.blue.opacity(0.6))
+            .foregroundColor(.white)
+            .cornerRadius(12)
+        }
+        .disabled(isUploading || (vmState is UserState.Loading))
+        .padding(.horizontal)
+        .padding(.vertical, 16)
+    }
+
+    @ViewBuilder
+    private var stateBanner: some View {
+        switch vmState {
+        case is UserState.Loading:
+            ProgressView("Please wait...").padding(.horizontal)
+        case let e as UserState.Error:
+            Text(e.message).foregroundColor(.red).padding(.horizontal)
+        case is UserState.Loaded:
+            Text("Success!").foregroundColor(.green).padding(.horizontal)
+        default:
+            EmptyView()
+        }
+    }
+
+    // MARK: - Sync SwiftUI <- VM
+
+    private func syncFromInitial(_ s: UserState.Initial) {
+        let d = s.data
+        if email != d.email { email = d.email }
+        if password != d.password { password = d.password }
+        if ownerName != d.ownerName { ownerName = d.ownerName }
+        if dogName != d.dogName { dogName = d.dogName }
+        if selectedBreed != d.dogBreed { selectedBreed = d.dogBreed }
+        let male = (d.dogGender == .male)
+        if isMale != male { isMale = male }
+        if isNeutered != d.isNeutered { isNeutered = d.isNeutered }
+        if isFriendly != d.isFriendly { isFriendly = d.isFriendly }
+        if selectedWeight != Int(d.dogWeight) { selectedWeight = Int(d.dogWeight) }
+        if let url = d.dogPictureUrl, !url.isEmpty { uploadedUrl = url }
+    }
+
+    // MARK: - Upload
+
+    private func startCloudinaryUpload(image: UIImage) {
+        guard let data = image.jpegData(compressionQuality: 0.9) else {
+            uploadError = "Couldn't read image data"
+            return
+        }
+        isUploading = true
+        uploadError = nil
+        uploadedUrl = nil
+
+        CloudinaryUploader.upload(data) { url in
+            DispatchQueue.main.async {
+                self.isUploading = false
+                if let url, !url.isEmpty {
+                    self.uploadedUrl = url
+                    self.viewModel.setDogPictureUrl(url: url)
+                } else {
+                    self.uploadError = "Upload failed"
+                }
+            }
+        }
+    }
+
+    private func labeledField<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.subheadline)
+            content()
+                .padding(12)
+                .background(Color.black.opacity(0.05))
+                .cornerRadius(8)
+        }
     }
 }
