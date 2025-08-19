@@ -16,31 +16,41 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.PermissionState
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import kotlinx.coroutines.launch
 import org.example.project.data.dogGardens.DogGardensViewModel
+import org.example.project.data.firebase.FirebaseRepository
 import org.example.project.data.remote.dto.DogDto
 import org.example.project.domain.models.DogBrief
+import org.example.project.domain.models.DogGarden
 import org.example.project.enum.Gender
 import org.example.project.features.registration.UserViewModel
 import org.example.project.presentation.screens.HomeTab
 import org.example.project.utils.Location
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import org.koin.compose.getKoin
+import org.koin.compose.koinInject
 
-// constants for fixed text widths
+
 private val thirtySixDp = 36.dp
 private val fortyEightDp = 48.dp
 
-// --- DogBrief mapping (DogDto -> DogBrief) ---
+
 private fun DogDto.toDogBrief(): DogBrief =
     DogBrief(
         id = id,
@@ -48,50 +58,75 @@ private fun DogDto.toDogBrief(): DogBrief =
         dogGender = if (isMale) Gender.MALE else Gender.FEMALE,
         isFriendly = isFriendly,
         isNeutered = isNeutered,
-        dogPictureUrl = dogPictureUrl // << use your field name
+        dogPictureUrl = dogPictureUrl
     )
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun GardenScreen(
-    viewModel: DogGardensViewModel,
     onBack: () -> Unit,
     onScan: () -> Unit, // kept for compatibility
     onGoProfile: () -> Unit,
-    userViewModel: UserViewModel,
     onLogout: () -> Unit
 ) {
     // Permissions (delegated effect)
+    val koin = getKoin()
+    val dogGardensViewModel = remember(koin) {
+        koin.get<DogGardensViewModel>()
+    }
     val fine = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     val coarse = rememberPermissionState(Manifest.permission.ACCESS_COARSE_LOCATION)
     LocationPermissionGate(
         fine = fine,
         coarse = coarse,
-        onGranted = { viewModel.loadLocation() }
+        onGranted = { dogGardensViewModel.loadLocation() }
     )
+    val userViewModel = koinInject<UserViewModel>()
+
 
     var selectedTab by remember { mutableStateOf(HomeTab.Yard) }
 
     // Observe VM state
-    val userLoc by viewModel.userLocation.collectAsState()
-    val searchCenter by viewModel.searchCenter.collectAsState()
-    val gardens by viewModel.gardens.collectAsState()
-    val radiusMeters by viewModel.radiusMeters.collectAsState()
+    val userLoc by dogGardensViewModel.userLocation.collectAsState()
+    val searchCenter by dogGardensViewModel.searchCenter.collectAsState()
+    val gardens by dogGardensViewModel.gardens.collectAsState()
+    val radiusMeters by dogGardensViewModel.radiusMeters.collectAsState()
     val radiusKm = (radiusMeters / 1000f).coerceAtLeast(1f)
 
     // Selected garden (sheet host will handle side-effects)
-    var selectedGarden by rememberSaveable { mutableStateOf<org.example.project.domain.models.DogGarden?>(null) }
+    var selectedGarden by rememberSaveable { mutableStateOf<DogGarden?>(null) }
 
     // Dog picker state
     val showPicker by userViewModel.shouldShowDogPicker.collectAsState()
     val cachedUser by userViewModel.currentUser.collectAsState()
     val selectedDogIds by userViewModel.selectedDogIds.collectAsState()
 
-    // Ensure we have user/dogs (picker)
-    LaunchedEffect(Unit) { userViewModel.loadUserIfNeeded() }
+    // Compose scope for launching suspend calls from callbacks/observers
+    val uiScope = rememberCoroutineScope()
+
+    // Ensure we have user/dogs (picker) and make sure picker is closed on entry
+    LaunchedEffect(Unit) {
+        userViewModel.dismissDogPicker()
+        userViewModel.loadUserIfNeeded() // LaunchedEffect is a suspend scope
+    }
+
+    // >>> Refresh dogs when returning to this screen (after adding a new dog elsewhere)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                userViewModel.invalidateUserCache()
+                uiScope.launch { userViewModel.loadUserIfNeeded() } // suspend → launch
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // Keep garden list in sync with radius/center
-    LaunchedEffect(radiusMeters, searchCenter) { viewModel.getGoogleGardens() }
+    LaunchedEffect(radiusMeters, searchCenter) { dogGardensViewModel.getGoogleGardens() }
+
+    var pendingCheckInGardenId by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         bottomBar = {
@@ -127,8 +162,8 @@ fun GardenScreen(
                 gardenCount = gardens.size,
                 radiusKm = radiusKm,
                 onRadiusCommit = { meters ->
-                    viewModel.setRadius(meters)
-                    viewModel.getGoogleGardens()
+                    dogGardensViewModel.setRadius(meters)
+                    dogGardensViewModel.getGoogleGardens()
                 }
             )
 
@@ -164,7 +199,7 @@ fun GardenScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Button(
-                    onClick = { viewModel.useMyLocationAsCenter(); viewModel.getGoogleGardens() },
+                    onClick = { dogGardensViewModel.useMyLocationAsCenter(); dogGardensViewModel.getGoogleGardens() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
@@ -175,11 +210,25 @@ fun GardenScreen(
         }
     }
 
-    // Dog picker host
+    // Dog picker host (only opens when we explicitly request it)
     DogPickerHost(
         showPicker = showPicker,
         userViewModel = userViewModel,
         dogs = cachedUser?.dogList ?: emptyList(),
+        onConfirmWithIds = { ids: Set<String> ->
+            userViewModel.setSelectedDogIds(ids)
+            userViewModel.dismissDogPicker()
+
+            // If user clicked "Check in" and we asked for dogs now, auto check-in after confirm
+            pendingCheckInGardenId?.let { gid ->
+                val allDogs = cachedUser?.dogList ?: emptyList()
+                val chosen = allDogs.filter { it.id in ids }
+                if (chosen.isNotEmpty()) {
+                    uiScope.launch { dogGardensViewModel.checkInDogs(gid, chosen) }
+                }
+                pendingCheckInGardenId = null
+            }
+        }
     )
 
     // Garden sheet host (loads photo + presence + check-in/out)
@@ -189,8 +238,15 @@ fun GardenScreen(
     GardenBottomSheetHost(
         selectedGarden = selectedGarden,
         onDismiss = { selectedGarden = null },
-        viewModel = viewModel,
-        myDogs = myDogs
+        viewModel = dogGardensViewModel,
+        myDogs = myDogs,
+        onOpenDogPicker = {
+            // Before opening the picker, force-refresh dogs so newly registered dogs appear
+            userViewModel.invalidateUserCache()
+            uiScope.launch { userViewModel.loadUserIfNeeded() } // suspend → launch
+            pendingCheckInGardenId = selectedGarden?.id
+            userViewModel.showDogPicker()
+        }
     )
 
     BackHandler { onBack() }
@@ -201,8 +257,8 @@ fun GardenScreen(
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 private fun LocationPermissionGate(
-    fine: com.google.accompanist.permissions.PermissionState,
-    coarse: com.google.accompanist.permissions.PermissionState,
+    fine: PermissionState,
+    coarse: PermissionState,
     onGranted: () -> Unit
 ) {
     var requestedOnce by remember { mutableStateOf(false) }
@@ -279,7 +335,8 @@ private fun TopInfoPanel(
 private fun DogPickerHost(
     showPicker: Boolean,
     userViewModel: UserViewModel,
-    dogs: List<org.example.project.data.remote.dto.DogDto>
+    dogs: List<DogDto>,
+    onConfirmWithIds: (Set<String>) -> Unit
 ) {
     val pickerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     if (!showPicker) return
@@ -291,9 +348,8 @@ private fun DogPickerHost(
         DogMultiSelectSheet(
             dogs = dogs,
             initiallySelected = userViewModel.selectedDogIds.collectAsState().value,
-            onConfirm = { selectedIds ->
-                userViewModel.setSelectedDogIds(selectedIds)
-                userViewModel.dismissDogPicker()
+            onConfirm = { selectedIds: Set<String> ->
+                onConfirmWithIds(selectedIds)
             },
             onCancel = { userViewModel.dismissDogPicker() }
         )
@@ -303,10 +359,11 @@ private fun DogPickerHost(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GardenBottomSheetHost(
-    selectedGarden: org.example.project.domain.models.DogGarden?,
+    selectedGarden: DogGarden?,
     onDismiss: () -> Unit,
     viewModel: DogGardensViewModel,
-    myDogs: List<org.example.project.data.remote.dto.DogDto>
+    myDogs: List<DogDto>,
+    onOpenDogPicker: () -> Unit
 ) {
     if (selectedGarden == null) {
         // Ensure we stop listening if the sheet is closed externally
@@ -319,10 +376,10 @@ private fun GardenBottomSheetHost(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val uiScope = rememberCoroutineScope()
 
-    // NEW: selected dog brief to show in a dialog
+
     var selectedDogBrief by remember { mutableStateOf<DogBrief?>(null) }
 
-    // Start/stop presence + load photo when garden changes
+
     LaunchedEffect(selectedGarden.id) {
         viewModel.loadGardenPhoto(selectedGarden.id, 900)
         viewModel.startWatchingPresence(selectedGarden.id)
@@ -348,11 +405,12 @@ private fun GardenBottomSheetHost(
             },
             onDogClick = { dogDto ->
                 selectedDogBrief = dogDto.toDogBrief()
-            }
+            },
+            onOpenDogPicker = onOpenDogPicker
         )
     }
 
-    // Dog details dialog
+
     selectedDogBrief?.let { brief ->
         DogDetailsDialog(
             dog = brief,
@@ -361,15 +419,15 @@ private fun GardenBottomSheetHost(
     }
 }
 
-/* ------------ Existing pieces (unchanged) ------------- */
+
 
 @Composable
 private fun MapView(
     center: Location,
-    parks: List<org.example.project.domain.models.DogGarden>,
+    parks: List<DogGarden>,
     radiusMeters: Int,
     userLoc: Location?,
-    onMarkerClick: (org.example.project.domain.models.DogGarden) -> Unit
+    onMarkerClick: (DogGarden) -> Unit
 ) {
     val cameraState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(center.latitude, center.longitude), 14f)
@@ -386,7 +444,7 @@ private fun MapView(
         modifier = Modifier.fillMaxSize(),
         cameraPositionState = cameraState
     ) {
-        com.google.maps.android.compose.Circle(
+        Circle(
             center = LatLng(center.latitude, center.longitude),
             radius = radiusMeters.toDouble(),
             strokeWidth = 2f
@@ -416,13 +474,14 @@ private fun MapView(
 
 @Composable
 private fun GardenInfoSheet(
-    garden: org.example.project.domain.models.DogGarden,
+    garden: DogGarden,
     photoUrl: String?,
-    presentDogs: List<org.example.project.data.remote.dto.DogDto>,
-    mySelectedDogs: List<org.example.project.data.remote.dto.DogDto>,
+    presentDogs: List<DogDto>,
+    mySelectedDogs: List<DogDto>,
     onCheckIn: () -> Unit,
     onCheckOut: () -> Unit,
-    onDogClick: (org.example.project.data.remote.dto.DogDto) -> Unit, // << FIXED type
+    onDogClick: (DogDto) -> Unit,
+    onOpenDogPicker: () -> Unit
 ) {
     Column(
         Modifier
@@ -488,7 +547,12 @@ private fun GardenInfoSheet(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             OutlinedButton(onClick = onCheckOut) { Text("Check out") }
             Spacer(Modifier.width(8.dp))
-            Button(onClick = onCheckIn, enabled = mySelectedDogs.isNotEmpty()) { Text("Check in") }
+            Button(
+                onClick = {
+                    if (mySelectedDogs.isEmpty()) onOpenDogPicker() else onCheckIn()
+                },
+                enabled = true
+            ) { Text("Check in") }
         }
         Spacer(Modifier.height(8.dp))
     }
@@ -496,7 +560,7 @@ private fun GardenInfoSheet(
 
 @Composable
 private fun DogRowCompact(
-    dog: org.example.project.data.remote.dto.DogDto,
+    dog: DogDto,
     onClick: () -> Unit
 ) {
     Row(
@@ -538,7 +602,7 @@ private fun DogRowCompact(
 
 @Composable
 private fun DogMultiSelectSheet(
-    dogs: List<org.example.project.data.remote.dto.DogDto>,
+    dogs: List<DogDto>,
     initiallySelected: Set<String>,
     onConfirm: (Set<String>) -> Unit,
     onCancel: () -> Unit
@@ -590,7 +654,7 @@ private fun DogMultiSelectSheet(
 
 @Composable
 private fun DogSelectRow(
-    dog: org.example.project.data.remote.dto.DogDto,
+    dog: DogDto,
     checked: Boolean,
     onToggle: () -> Unit
 ) {
@@ -633,7 +697,7 @@ private fun DogSelectRow(
     }
 }
 
-/* ---------- NEW: Dog details dialog ---------- */
+
 
 @Composable
 private fun DogDetailsDialog(
@@ -685,4 +749,5 @@ private fun InfoRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+
 }

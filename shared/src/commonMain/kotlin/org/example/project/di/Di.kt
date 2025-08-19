@@ -18,6 +18,7 @@ import org.example.project.data.firebase.RemoteFirebaseRepository
 import org.example.project.data.dogGardens.GardensRepository
 import org.example.project.data.dogGardens.GoogleGardensRepository
 import org.example.project.data.dogGardens.DogGardensViewModel
+import org.example.project.data.dogs.DogsViewModel
 import org.example.project.features.postAuth.postAuthModule
 import org.example.project.features.registration.UserViewModel
 
@@ -68,6 +69,7 @@ val presentationModule = module {
             defaultLanguage = "he"
         )
     }
+    single { DogsViewModel(firebaseRepo = get()) }
     single {
        UserViewModel(
             firebaseRepo = get()

@@ -114,7 +114,6 @@ class MainActivity : ComponentActivity() {
 
                 composable("home") {
                     GardenScreen(
-                        viewModel = gardenVm,
                         onBack = { navController.popBackStack() },
                         onScan = { gardenVm.onScanClick() },
                         onGoProfile = {
@@ -122,7 +121,7 @@ class MainActivity : ComponentActivity() {
                                 launchSingleTop = true
                             }
                         },
-                        userViewModel = userVm,
+
                         onLogout = {
                             scope.launch {
                                 // Sign out and clear any cached user state
