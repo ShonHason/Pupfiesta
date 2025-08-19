@@ -27,7 +27,7 @@ fun LandingScreen(
     ) {
         Column(
             modifier = Modifier
-                // these came from the Card before:
+
                 .fillMaxWidth(0.9f)
                 .aspectRatio(0.6f)
                 .padding(24.dp),

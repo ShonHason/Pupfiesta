@@ -43,7 +43,7 @@ fun AddDogScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // ---- form state (same as registration dog section) ----
+
     var dogName by remember { mutableStateOf("") }
     var selectedBreed by remember { mutableStateOf(Breed.MIXED) }
     var breedMenuExpanded by remember { mutableStateOf(false) }
@@ -64,7 +64,7 @@ fun AddDogScreen(
     var saving by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
 
-    // ---- launchers (same flow as registration) ----
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
@@ -278,7 +278,7 @@ fun AddDogScreen(
                 }
             }
 
-            // Save
+
             Button(
                 onClick = {
                     if (uploading) { saveError = "Please wait for the photo upload to finish"; return@Button }
@@ -327,7 +327,7 @@ fun AddDogScreen(
         }
     }
 
-    // Choose image source dialog
+
     if (showImageSourceDialog) {
         AlertDialog(
             onDismissRequest = { showImageSourceDialog = false },
